@@ -27,10 +27,18 @@ que cash16.fr via la *Storefront API*. Concrètement :
    **panier (cart)**.
 3. **Installe** l'application, puis dans l'onglet **Identifiants de l'API**,
    copie le **jeton d'accès Storefront API**.
-4. Ouvre le fichier [`src/config/shopify.ts`](src/config/shopify.ts) et remplis :
-   - `SHOPIFY_STORE_DOMAIN` → ton domaine technique, ex. `cash16.myshopify.com`
-     (et **pas** `cash16.fr`).
-   - `SHOPIFY_STOREFRONT_TOKEN` → le jeton copié à l'étape 3.
+4. **Copie** le fichier `.env.example` en `.env`, puis remplis-le :
+   ```bash
+   cp .env.example .env
+   ```
+   - `EXPO_PUBLIC_SHOPIFY_DOMAIN` → ton domaine technique, ex.
+     `cash16.myshopify.com` (et **pas** `cash16.fr`).
+   - `EXPO_PUBLIC_SHOPIFY_STOREFRONT_TOKEN` → le jeton copié à l'étape 3.
+
+> 🔐 **Sécurité.** Le fichier `.env` reste **sur ta machine** : il est ignoré par
+> Git et n'est jamais publié. Ne mets **que** le jeton *Storefront API* (un jeton
+> public, prévu pour les apps). Ne mets **jamais** ta clé *Admin API* ou un mot de
+> passe, et ne colle jamais ces secrets dans un chat ou un message.
 
 Tant que ce n'est pas rempli, l'app affiche un écran d'aide au lieu du catalogue.
 
