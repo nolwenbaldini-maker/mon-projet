@@ -6,14 +6,20 @@ import { colors, formatMoney } from "../theme";
 interface Props {
   product: Product;
   onPress: () => void;
+  /** Largeur fixe (px) pour un affichage en carrousel ; sinon prend la place dispo. */
+  width?: number;
 }
 
-/** Vignette d'un produit dans la grille / liste. */
-export function ProductCard({ product, onPress }: Props) {
+/** Vignette d'un produit dans la grille / liste / carrousel. */
+export function ProductCard({ product, onPress, width }: Props) {
   const price = product.priceRange.minVariantPrice;
 
   return (
-    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.8}>
+    <TouchableOpacity
+      style={[styles.card, width ? { width, flex: 0 } : styles.flex]}
+      onPress={onPress}
+      activeOpacity={0.8}
+    >
       {product.featuredImage ? (
         <Image source={{ uri: product.featuredImage.url }} style={styles.image} />
       ) : (
@@ -38,7 +44,6 @@ export function ProductCard({ product, onPress }: Props) {
 
 const styles = StyleSheet.create({
   card: {
-    flex: 1,
     backgroundColor: colors.background,
     borderRadius: 12,
     borderWidth: 1,
@@ -46,6 +51,7 @@ const styles = StyleSheet.create({
     margin: 6,
     overflow: "hidden",
   },
+  flex: { flex: 1 },
   image: { width: "100%", aspectRatio: 1, backgroundColor: colors.card },
   noImage: { alignItems: "center", justifyContent: "center" },
   noImageText: { color: colors.muted, fontSize: 12 },

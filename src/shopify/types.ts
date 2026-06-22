@@ -32,6 +32,8 @@ export interface Collection {
   id: string;
   handle: string;
   title: string;
+  /** Vignette (image du premier produit de la rubrique), si disponible. */
+  thumbnail: string | null;
 }
 
 export interface CartLine {

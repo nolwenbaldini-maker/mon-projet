@@ -36,13 +36,27 @@ function flattenProduct(node: any): Product {
 export async function getCollections(): Promise<Collection[]> {
   const query = /* GraphQL */ `
     query Collections {
-      collections(first: 20, sortKey: TITLE) {
-        edges { node { id handle title } }
+      collections(first: 100, sortKey: TITLE) {
+        edges {
+          node {
+            id
+            handle
+            title
+            products(first: 1) {
+              edges { node { featuredImage { url } } }
+            }
+          }
+        }
       }
     }
   `;
   const data = await shopifyRequest<any>(query);
-  return data.collections.edges.map((e: any) => e.node);
+  return data.collections.edges.map((e: any) => ({
+    id: e.node.id,
+    handle: e.node.handle,
+    title: e.node.title,
+    thumbnail: e.node.products.edges[0]?.node.featuredImage?.url ?? null,
+  }));
 }
 
 /** Récupère des produits, éventuellement filtrés par rayon (handle de collection). */

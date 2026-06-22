@@ -6,6 +6,7 @@ import { CartButton } from "./src/components/CartButton";
 import { CartProvider } from "./src/context/CartContext";
 import type { RootStackParamList } from "./src/navigation";
 import { CartScreen } from "./src/screens/CartScreen";
+import { CollectionScreen } from "./src/screens/CollectionScreen";
 import { HomeScreen } from "./src/screens/HomeScreen";
 import { ProductScreen } from "./src/screens/ProductScreen";
 import { colors } from "./src/theme";
@@ -29,6 +30,16 @@ export default function App() {
             component={HomeScreen}
             options={({ navigation }) => ({
               title: "€ASH Angoulême",
+              headerRight: () => (
+                <CartButton onPress={() => navigation.navigate("Cart")} />
+              ),
+            })}
+          />
+          <Stack.Screen
+            name="Collection"
+            component={CollectionScreen}
+            options={({ navigation, route }) => ({
+              title: route.params.title,
               headerRight: () => (
                 <CartButton onPress={() => navigation.navigate("Cart")} />
               ),

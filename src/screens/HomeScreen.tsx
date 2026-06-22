@@ -1,8 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  FlatList,
-  RefreshControl,
+  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,22 +14,23 @@ import type { HomeProps } from "../navigation";
 import { getCollections, getProducts } from "../shopify/queries";
 import type { Collection, Product } from "../shopify/types";
 import { colors } from "../theme";
+import { UNIVERSES } from "../universes";
 
 export function HomeScreen({ navigation }: HomeProps) {
   const [collections, setCollections] = useState<Collection[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [activeHandle, setActiveHandle] = useState<string | null>(null);
+  const [newProducts, setNewProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  async function load(handle: string | null) {
+  async function load() {
     setLoading(true);
     setError(null);
     try {
-      const items = await getProducts(handle ?? undefined);
-      setProducts(items);
+      const [cols, prods] = await Promise.all([getCollections(), getProducts()]);
+      setCollections(cols);
+      setNewProducts(prods.slice(0, 12));
     } catch (e: any) {
-      setError(e.message ?? "Impossible de charger les produits");
+      setError(e.message ?? "Impossible de charger la boutique");
     } finally {
       setLoading(false);
     }
@@ -42,131 +42,211 @@ export function HomeScreen({ navigation }: HomeProps) {
       setError("config");
       return;
     }
-    getCollections().then(setCollections).catch(() => {});
-    load(null);
+    load();
   }, []);
+
+  const byHandle = useMemo(() => {
+    const m = new Map<string, Collection>();
+    collections.forEach((c) => m.set(c.handle, c));
+    return m;
+  }, [collections]);
 
   if (error === "config") {
     return (
       <View style={styles.center}>
         <Text style={styles.configTitle}>Connexion Shopify à configurer</Text>
         <Text style={styles.configText}>
-          Ouvre le fichier{"\n"}
-          <Text style={styles.code}>src/config/shopify.ts</Text>
-          {"\n"}et renseigne ton domaine et ton jeton Storefront API.
-          {"\n\n"}Les instructions sont dans le README.
+          Renseigne ton domaine et ton jeton dans le fichier{"\n"}
+          <Text style={styles.code}>.env</Text> (voir le README).
         </Text>
       </View>
     );
   }
 
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.error}>{error}</Text>
+        <TouchableOpacity onPress={load} style={styles.retry}>
+          <Text style={styles.retryText}>Réessayer</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   return (
-    <View style={styles.container}>
-      {/* Barre des rayons (collections) */}
-      <View style={styles.chipsWrapper}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chips}
-        >
-          <Chip
-            label="Tout"
-            active={activeHandle === null}
-            onPress={() => {
-              setActiveHandle(null);
-              load(null);
-            }}
-          />
-          {collections.map((c) => (
-            <Chip
-              key={c.id}
-              label={c.title}
-              active={activeHandle === c.handle}
-              onPress={() => {
-                setActiveHandle(c.handle);
-                load(c.handle);
-              }}
-            />
-          ))}
-        </ScrollView>
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      {/* Bandeau promo (comme sur le site) */}
+      <View style={styles.promo}>
+        <Text style={styles.promoText}>🚚 Livraison gratuite dès 100€ d'achat !</Text>
       </View>
 
-      {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
-      ) : error ? (
-        <View style={styles.center}>
-          <Text style={styles.error}>{error}</Text>
-          <TouchableOpacity onPress={() => load(activeHandle)} style={styles.retry}>
-            <Text style={styles.retryText}>Réessayer</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <FlatList
-          data={products}
-          keyExtractor={(item) => item.id}
-          numColumns={2}
-          contentContainerStyle={styles.grid}
-          refreshControl={
-            <RefreshControl refreshing={false} onRefresh={() => load(activeHandle)} />
+      {/* Héros */}
+      <View style={styles.hero}>
+        <Text style={styles.heroTitle}>
+          Votre boutique spécialisée{"\n"}Jeux Vidéo, TCG & Produits Culturels
+        </Text>
+        <Text style={styles.heroSubtitle}>
+          Achat & vente d'occasion à Angoulême-Champniers depuis 2014
+        </Text>
+        <TouchableOpacity
+          style={styles.heroBtn}
+          onPress={() =>
+            navigation.navigate("Collection", { handle: "", title: "Tout le catalogue" })
           }
-          ListEmptyComponent={
-            <Text style={styles.empty}>Aucun produit dans ce rayon.</Text>
-          }
-          renderItem={({ item }) => (
-            <ProductCard
-              product={item}
-              onPress={() =>
-                navigation.navigate("Product", {
-                  handle: item.handle,
-                  title: item.title,
-                })
-              }
-            />
-          )}
-        />
+        >
+          <Text style={styles.heroBtnText}>Voir tout le catalogue</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Nouveautés */}
+      {newProducts.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>🆕 Nouveautés</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.hList}
+          >
+            {newProducts.map((p) => (
+              <ProductCard
+                key={p.id}
+                product={p}
+                width={150}
+                onPress={() =>
+                  navigation.navigate("Product", { handle: p.handle, title: p.title })
+                }
+              />
+            ))}
+          </ScrollView>
+        </View>
       )}
-    </View>
+
+      {/* Univers et leurs rubriques */}
+      {UNIVERSES.map((u) => {
+        const rubriques = u.handles
+          .map((h) => byHandle.get(h))
+          .filter((c): c is Collection => Boolean(c));
+        if (rubriques.length === 0) return null;
+        return (
+          <View key={u.key} style={styles.section}>
+            <Text style={styles.sectionTitle}>
+              {u.emoji} {u.label}
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.hList}
+            >
+              {rubriques.map((c) => (
+                <RubriqueCard
+                  key={c.id}
+                  collection={c}
+                  emoji={u.emoji}
+                  onPress={() =>
+                    navigation.navigate("Collection", { handle: c.handle, title: c.title })
+                  }
+                />
+              ))}
+            </ScrollView>
+          </View>
+        );
+      })}
+
+      <View style={{ height: 24 }} />
+    </ScrollView>
   );
 }
 
-function Chip({
-  label,
-  active,
+/** Carte d'une rubrique (vignette + titre). */
+function RubriqueCard({
+  collection,
+  emoji,
   onPress,
 }: {
-  label: string;
-  active: boolean;
+  collection: Collection;
+  emoji: string;
   onPress: () => void;
 }) {
   return (
-    <TouchableOpacity
-      onPress={onPress}
-      style={[styles.chip, active && styles.chipActive]}
-    >
-      <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
+    <TouchableOpacity style={styles.rubrique} onPress={onPress} activeOpacity={0.85}>
+      {collection.thumbnail ? (
+        <Image source={{ uri: collection.thumbnail }} style={styles.rubriqueImg} />
+      ) : (
+        <View style={[styles.rubriqueImg, styles.rubriquePlaceholder]}>
+          <Text style={styles.rubriqueEmoji}>{emoji}</Text>
+        </View>
+      )}
+      <Text style={styles.rubriqueTitle} numberOfLines={2}>
+        {collection.title}
+      </Text>
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
-  chipsWrapper: { borderBottomWidth: 1, borderBottomColor: colors.border },
-  chips: { paddingHorizontal: 8, paddingVertical: 10, gap: 8 },
-  chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: colors.card,
-    marginRight: 8,
+  center: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+    backgroundColor: colors.background,
   },
-  chipActive: { backgroundColor: colors.primary },
-  chipText: { color: colors.text, fontWeight: "600", fontSize: 13 },
-  chipTextActive: { color: "#fff" },
-  grid: { padding: 6 },
-  empty: { textAlign: "center", color: colors.muted, marginTop: 40 },
+
+  promo: { backgroundColor: colors.primaryDark, paddingVertical: 8, alignItems: "center" },
+  promoText: { color: "#fff", fontSize: 13, fontWeight: "600" },
+
+  hero: { backgroundColor: colors.primary, paddingHorizontal: 20, paddingVertical: 24 },
+  heroTitle: { color: "#fff", fontSize: 20, fontWeight: "800", lineHeight: 27 },
+  heroSubtitle: { color: "#d6e6dc", fontSize: 13, marginTop: 8 },
+  heroBtn: {
+    alignSelf: "flex-start",
+    marginTop: 16,
+    backgroundColor: colors.accent,
+    paddingHorizontal: 18,
+    paddingVertical: 11,
+    borderRadius: 24,
+  },
+  heroBtnText: { color: colors.accentText, fontWeight: "700", fontSize: 14 },
+
+  section: { marginTop: 20 },
+  sectionTitle: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: colors.text,
+    paddingHorizontal: 16,
+    marginBottom: 10,
+  },
+  hList: { paddingHorizontal: 10 },
+
+  rubrique: { width: 130, marginHorizontal: 6 },
+  rubriqueImg: {
+    width: 130,
+    height: 130,
+    borderRadius: 12,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  rubriquePlaceholder: { alignItems: "center", justifyContent: "center" },
+  rubriqueEmoji: { fontSize: 46 },
+  rubriqueTitle: {
+    marginTop: 8,
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.text,
+    textAlign: "center",
+  },
+
   error: { color: colors.primary, textAlign: "center", marginBottom: 12 },
   retry: {
     paddingHorizontal: 20,
