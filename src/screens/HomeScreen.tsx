@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  FlatList,
   Image,
   ScrollView,
   StyleSheet,
@@ -111,22 +112,24 @@ export function HomeScreen({ navigation }: HomeProps) {
       {newProducts.length > 0 && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>🆕 Nouveautés</Text>
-          <ScrollView
+          <FlatList
             horizontal
+            data={newProducts}
+            keyExtractor={(p) => p.id}
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.hList}
-          >
-            {newProducts.map((p) => (
+            initialNumToRender={4}
+            removeClippedSubviews
+            renderItem={({ item: p }) => (
               <ProductCard
-                key={p.id}
                 product={p}
                 width={150}
                 onPress={() =>
                   navigation.navigate("Product", { handle: p.handle, title: p.title })
                 }
               />
-            ))}
-          </ScrollView>
+            )}
+          />
         </View>
       )}
 
@@ -141,22 +144,24 @@ export function HomeScreen({ navigation }: HomeProps) {
             <Text style={styles.sectionTitle}>
               {u.emoji} {u.label}
             </Text>
-            <ScrollView
+            <FlatList
               horizontal
+              data={rubriques}
+              keyExtractor={(c) => c.id}
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.hList}
-            >
-              {rubriques.map((c) => (
+              initialNumToRender={4}
+              removeClippedSubviews
+              renderItem={({ item: c }) => (
                 <RubriqueCard
-                  key={c.id}
                   collection={c}
                   emoji={u.emoji}
                   onPress={() =>
                     navigation.navigate("Collection", { handle: c.handle, title: c.title })
                   }
                 />
-              ))}
-            </ScrollView>
+              )}
+            />
           </View>
         );
       })}

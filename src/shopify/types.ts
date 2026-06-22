@@ -24,6 +24,8 @@ export interface Product {
   description: string;
   availableForSale: boolean;
   featuredImage: ProductImage | null;
+  /** Toutes les photos du produit (rempli sur la fiche produit). */
+  images: ProductImage[];
   priceRange: { minVariantPrice: Money };
   variants: ProductVariant[];
 }

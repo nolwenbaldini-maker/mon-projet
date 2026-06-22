@@ -1,7 +1,7 @@
 import { shopifyRequest } from "./client";
 import type { Cart, Collection, Product } from "./types";
 
-/** Champs produit réutilisés dans plusieurs requêtes. */
+/** Champs produit réutilisés dans plusieurs requêtes (image redimensionnée). */
 const PRODUCT_FRAGMENT = /* GraphQL */ `
   fragment ProductFields on Product {
     id
@@ -9,7 +9,7 @@ const PRODUCT_FRAGMENT = /* GraphQL */ `
     title
     description
     availableForSale
-    featuredImage { url altText }
+    featuredImage { url(transform: { maxWidth: 400, maxHeight: 400 }) altText }
     priceRange { minVariantPrice { amount currencyCode } }
     variants(first: 10) {
       edges {
@@ -29,6 +29,7 @@ function flattenProduct(node: any): Product {
   return {
     ...node,
     variants: node.variants.edges.map((e: any) => e.node),
+    images: node.images ? node.images.edges.map((e: any) => e.node) : [],
   };
 }
 
@@ -43,7 +44,7 @@ export async function getCollections(): Promise<Collection[]> {
             handle
             title
             products(first: 1) {
-              edges { node { featuredImage { url } } }
+              edges { node { featuredImage { url(transform: { maxWidth: 300, maxHeight: 300 }) } } }
             }
           }
         }
@@ -89,12 +90,19 @@ export async function getProducts(collectionHandle?: string): Promise<Product[]>
   return data.products.edges.map((e: any) => flattenProduct(e.node));
 }
 
-/** Récupère un produit par son handle (identifiant lisible dans l'URL). */
+/** Récupère un produit par son handle, avec toutes ses photos. */
 export async function getProductByHandle(handle: string): Promise<Product | null> {
   const query = /* GraphQL */ `
     ${PRODUCT_FRAGMENT}
     query ProductByHandle($handle: String!) {
-      product(handle: $handle) { ...ProductFields }
+      product(handle: $handle) {
+        ...ProductFields
+        images(first: 10) {
+          edges {
+            node { url(transform: { maxWidth: 900, maxHeight: 900 }) altText }
+          }
+        }
+      }
     }
   `;
   const data = await shopifyRequest<any>(query, { handle });

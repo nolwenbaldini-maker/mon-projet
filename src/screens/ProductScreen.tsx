@@ -2,16 +2,19 @@ import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Image,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { useCart } from "../context/CartContext";
 import type { ProductProps } from "../navigation";
 import { getProductByHandle } from "../shopify/queries";
-import type { Product, ProductVariant } from "../shopify/types";
+import type { Product, ProductImage, ProductVariant } from "../shopify/types";
 import { colors, formatMoney } from "../theme";
 
 export function ProductScreen({ route, navigation }: ProductProps) {
@@ -61,9 +64,15 @@ export function ProductScreen({ route, navigation }: ProductProps) {
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scroll}>
-        {product.featuredImage && (
-          <Image source={{ uri: product.featuredImage.url }} style={styles.image} />
-        )}
+        <ProductGallery
+          images={
+            product.images.length > 0
+              ? product.images
+              : product.featuredImage
+              ? [product.featuredImage]
+              : []
+          }
+        />
         <View style={styles.body}>
           <Text style={styles.title}>{product.title}</Text>
           <Text style={styles.price}>
@@ -129,11 +138,70 @@ export function ProductScreen({ route, navigation }: ProductProps) {
   );
 }
 
+/** Galerie de photos glissable, avec points indicateurs. */
+function ProductGallery({ images }: { images: ProductImage[] }) {
+  const { width } = useWindowDimensions();
+  const [index, setIndex] = useState(0);
+
+  if (images.length === 0) {
+    return (
+      <View style={[styles.image, { width, height: width }, styles.noImage]}>
+        <Text style={styles.noImageText}>Pas de photo</Text>
+      </View>
+    );
+  }
+
+  function onScroll(e: NativeSyntheticEvent<NativeScrollEvent>) {
+    setIndex(Math.round(e.nativeEvent.contentOffset.x / width));
+  }
+
+  return (
+    <View>
+      <ScrollView
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onMomentumScrollEnd={onScroll}
+      >
+        {images.map((img, i) => (
+          <Image
+            key={i}
+            source={{ uri: img.url }}
+            style={[styles.image, { width, height: width }]}
+          />
+        ))}
+      </ScrollView>
+      {images.length > 1 && (
+        <View style={styles.dots}>
+          {images.map((_, i) => (
+            <View key={i} style={[styles.dot, i === index && styles.dotActive]} />
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   scroll: { paddingBottom: 24 },
-  image: { width: "100%", aspectRatio: 1, backgroundColor: colors.card },
+  image: { backgroundColor: colors.card },
+  noImage: { alignItems: "center", justifyContent: "center" },
+  noImageText: { color: colors.muted },
+  dots: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 10,
+  },
+  dot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: colors.border,
+  },
+  dotActive: { backgroundColor: colors.primary, width: 18 },
   body: { padding: 16 },
   title: { fontSize: 20, fontWeight: "700", color: colors.text },
   price: { fontSize: 22, fontWeight: "800", color: colors.primary, marginTop: 8 },
