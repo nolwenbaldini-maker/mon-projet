@@ -1,0 +1,181 @@
+import { shopifyRequest } from "./client";
+import type { Cart, Collection, Product } from "./types";
+
+/** Champs produit réutilisés dans plusieurs requêtes. */
+const PRODUCT_FRAGMENT = /* GraphQL */ `
+  fragment ProductFields on Product {
+    id
+    handle
+    title
+    description
+    availableForSale
+    featuredImage { url altText }
+    priceRange { minVariantPrice { amount currencyCode } }
+    variants(first: 10) {
+      edges {
+        node {
+          id
+          title
+          availableForSale
+          price { amount currencyCode }
+        }
+      }
+    }
+  }
+`;
+
+/** Transforme la structure edges/node de Shopify en simple tableau. */
+function flattenProduct(node: any): Product {
+  return {
+    ...node,
+    variants: node.variants.edges.map((e: any) => e.node),
+  };
+}
+
+/** Récupère les rayons (collections) de la boutique. */
+export async function getCollections(): Promise<Collection[]> {
+  const query = /* GraphQL */ `
+    query Collections {
+      collections(first: 20, sortKey: TITLE) {
+        edges { node { id handle title } }
+      }
+    }
+  `;
+  const data = await shopifyRequest<any>(query);
+  return data.collections.edges.map((e: any) => e.node);
+}
+
+/** Récupère des produits, éventuellement filtrés par rayon (handle de collection). */
+export async function getProducts(collectionHandle?: string): Promise<Product[]> {
+  if (collectionHandle) {
+    const query = /* GraphQL */ `
+      ${PRODUCT_FRAGMENT}
+      query CollectionProducts($handle: String!) {
+        collection(handle: $handle) {
+          products(first: 50) {
+            edges { node { ...ProductFields } }
+          }
+        }
+      }
+    `;
+    const data = await shopifyRequest<any>(query, { handle: collectionHandle });
+    if (!data.collection) return [];
+    return data.collection.products.edges.map((e: any) => flattenProduct(e.node));
+  }
+
+  const query = /* GraphQL */ `
+    ${PRODUCT_FRAGMENT}
+    query AllProducts {
+      products(first: 50, sortKey: CREATED_AT, reverse: true) {
+        edges { node { ...ProductFields } }
+      }
+    }
+  `;
+  const data = await shopifyRequest<any>(query);
+  return data.products.edges.map((e: any) => flattenProduct(e.node));
+}
+
+/** Récupère un produit par son handle (identifiant lisible dans l'URL). */
+export async function getProductByHandle(handle: string): Promise<Product | null> {
+  const query = /* GraphQL */ `
+    ${PRODUCT_FRAGMENT}
+    query ProductByHandle($handle: String!) {
+      product(handle: $handle) { ...ProductFields }
+    }
+  `;
+  const data = await shopifyRequest<any>(query, { handle });
+  return data.product ? flattenProduct(data.product) : null;
+}
+
+/** Champs du panier réutilisés. */
+const CART_FRAGMENT = /* GraphQL */ `
+  fragment CartFields on Cart {
+    id
+    checkoutUrl
+    totalQuantity
+    cost { totalAmount { amount currencyCode } }
+    lines(first: 50) {
+      edges {
+        node {
+          id
+          quantity
+          merchandise {
+            ... on ProductVariant {
+              id
+              title
+              price { amount currencyCode }
+              product { title featuredImage { url altText } }
+            }
+          }
+        }
+      }
+    }
+  }
+`;
+
+function flattenCart(node: any): Cart {
+  return {
+    ...node,
+    lines: node.lines.edges.map((e: any) => e.node),
+  };
+}
+
+/** Crée un nouveau panier avec une première ligne. */
+export async function cartCreate(variantId: string, quantity = 1): Promise<Cart> {
+  const query = /* GraphQL */ `
+    ${CART_FRAGMENT}
+    mutation CartCreate($lines: [CartLineInput!]!) {
+      cartCreate(input: { lines: $lines }) {
+        cart { ...CartFields }
+        userErrors { message }
+      }
+    }
+  `;
+  const data = await shopifyRequest<any>(query, {
+    lines: [{ merchandiseId: variantId, quantity }],
+  });
+  const { cart, userErrors } = data.cartCreate;
+  if (userErrors?.length) throw new Error(userErrors[0].message);
+  return flattenCart(cart);
+}
+
+/** Ajoute une ligne à un panier existant. */
+export async function cartLinesAdd(
+  cartId: string,
+  variantId: string,
+  quantity = 1
+): Promise<Cart> {
+  const query = /* GraphQL */ `
+    ${CART_FRAGMENT}
+    mutation CartLinesAdd($cartId: ID!, $lines: [CartLineInput!]!) {
+      cartLinesAdd(cartId: $cartId, lines: $lines) {
+        cart { ...CartFields }
+        userErrors { message }
+      }
+    }
+  `;
+  const data = await shopifyRequest<any>(query, {
+    cartId,
+    lines: [{ merchandiseId: variantId, quantity }],
+  });
+  const { cart, userErrors } = data.cartLinesAdd;
+  if (userErrors?.length) throw new Error(userErrors[0].message);
+  return flattenCart(cart);
+}
+
+/** Supprime une ligne du panier. */
+export async function cartLinesRemove(cartId: string, lineId: string): Promise<Cart> {
+  const query = /* GraphQL */ `
+    ${CART_FRAGMENT}
+    mutation CartLinesRemove($cartId: ID!, $lineIds: [ID!]!) {
+      cartLinesRemove(cartId: $cartId, lineIds: $lineIds) {
+        cart { ...CartFields }
+        userErrors { message }
+      }
+    }
+  `;
+  const data = await shopifyRequest<any>(query, { cartId, lineIds: [lineId] });
+  const { cart, userErrors } = data.cartLinesRemove;
+  if (userErrors?.length) throw new Error(userErrors[0].message);
+  return flattenCart(cart);
+}
