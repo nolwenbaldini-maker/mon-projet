@@ -201,3 +201,22 @@ export async function cartLinesRemove(cartId: string, lineId: string): Promise<C
   if (userErrors?.length) throw new Error(userErrors[0].message);
   return flattenCart(cart);
 }
+
+/** Rattache le panier au client connecté (commande liée + checkout pré-rempli). */
+export async function cartAttachCustomer(
+  cartId: string,
+  customerAccessToken: string
+): Promise<void> {
+  const query = /* GraphQL */ `
+    mutation CartBuyer($cartId: ID!, $token: String!) {
+      cartBuyerIdentityUpdate(
+        cartId: $cartId
+        buyerIdentity: { customerAccessToken: $token }
+      ) {
+        cart { id }
+        userErrors { message }
+      }
+    }
+  `;
+  await shopifyRequest<any>(query, { cartId, token: customerAccessToken });
+}

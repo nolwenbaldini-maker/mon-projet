@@ -9,18 +9,30 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
 import type { CartProps } from "../navigation";
+import { cartAttachCustomer } from "../shopify/queries";
 import { colors, formatMoney } from "../theme";
 
 export function CartScreen(_props: CartProps) {
   const { cart, removeLine, loading } = useCart();
+  const { token } = useAuth();
   const [checkingOut, setCheckingOut] = useState(false);
 
   async function checkout() {
     if (!cart) return;
     setCheckingOut(true);
     try {
+      // Si le client est connecté, on rattache le panier à son compte
+      // (commande liée au compte + checkout pré-rempli).
+      if (token) {
+        try {
+          await cartAttachCustomer(cart.id, token);
+        } catch {
+          // non bloquant : on continue même si le rattachement échoue
+        }
+      }
       // Ouvre le checkout sécurisé Shopify (paiement CB / PayPal déjà configuré).
       // Le paiement met à jour le stock dans Shopify → identique au site web.
       await WebBrowser.openBrowserAsync(cart.checkoutUrl);

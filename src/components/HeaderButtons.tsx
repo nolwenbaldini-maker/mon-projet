@@ -3,11 +3,19 @@ import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useCart } from "../context/CartContext";
 import { colors } from "../theme";
 
-/** Bouton panier affiché dans l'en-tête, avec une pastille du nombre d'articles. */
+/** Bouton "Mon compte" (en-tête). */
+export function AccountButton({ onPress }: { onPress: () => void }) {
+  return (
+    <TouchableOpacity onPress={onPress} style={styles.btn} hitSlop={10}>
+      <Text style={styles.icon}>👤</Text>
+    </TouchableOpacity>
+  );
+}
+
+/** Bouton panier avec pastille du nombre d'articles (en-tête). */
 export function CartButton({ onPress }: { onPress: () => void }) {
   const { cart } = useCart();
   const count = cart?.totalQuantity ?? 0;
-
   return (
     <TouchableOpacity onPress={onPress} style={styles.btn} hitSlop={10}>
       <Text style={styles.icon}>🛒</Text>
