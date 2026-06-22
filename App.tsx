@@ -11,6 +11,7 @@ import { AuthProvider } from "./src/context/AuthContext";
 import { CartProvider } from "./src/context/CartContext";
 import type { RootStackParamList } from "./src/navigation";
 import { AccountScreen } from "./src/screens/AccountScreen";
+import { AdminScreen } from "./src/screens/AdminScreen";
 import { CartScreen } from "./src/screens/CartScreen";
 import { CollectionScreen } from "./src/screens/CollectionScreen";
 import { HomeScreen } from "./src/screens/HomeScreen";
@@ -77,6 +78,11 @@ export default function App() {
               name="Account"
               component={AccountScreen}
               options={{ title: "Mon compte" }}
+            />
+            <Stack.Screen
+              name="Admin"
+              component={AdminScreen}
+              options={{ title: "Espace admin" }}
             />
           </Stack.Navigator>
         </NavigationContainer>

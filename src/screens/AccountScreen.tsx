@@ -1,3 +1,4 @@
+import { useNavigation } from "@react-navigation/native";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
@@ -138,8 +139,8 @@ function AuthForm() {
 
 function Profile() {
   const { customer, logout } = useAuth();
+  const navigation = useNavigation<any>();
   if (!customer) return null;
-  const name = [customer.firstName, customer.lastName].filter(Boolean).join(" ");
 
   return (
     <ScrollView style={styles.flex} contentContainerStyle={styles.profile}>
@@ -154,6 +155,13 @@ function Profile() {
       ) : (
         customer.orders.map((o) => <OrderCard key={o.id} order={o} />)
       )}
+
+      <TouchableOpacity
+        style={styles.adminBtn}
+        onPress={() => navigation.navigate("Admin")}
+      >
+        <Text style={styles.adminText}>🛠️ Espace admin</Text>
+      </TouchableOpacity>
 
       <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
         <Text style={styles.logoutText}>Se déconnecter</Text>
@@ -266,8 +274,16 @@ const styles = StyleSheet.create({
   orderDate: { fontSize: 12, color: colors.muted, marginTop: 2 },
   orderStatus: { fontSize: 13, color: colors.text, marginTop: 6, fontWeight: "600" },
   orderItems: { fontSize: 13, color: colors.muted, marginTop: 4 },
+  adminBtn: {
+    marginTop: 20,
+    backgroundColor: colors.primary,
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  adminText: { color: "#fff", fontWeight: "700" },
   logoutBtn: {
-    marginTop: 16,
+    marginTop: 12,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 10,

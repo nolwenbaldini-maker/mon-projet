@@ -7,6 +7,7 @@ export type RootStackParamList = {
   Product: { handle: string; title: string };
   Cart: undefined;
   Account: undefined;
+  Admin: undefined;
 };
 
 export type HomeProps = NativeStackScreenProps<RootStackParamList, "Home">;
