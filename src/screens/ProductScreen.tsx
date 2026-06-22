@@ -111,7 +111,7 @@ export function ProductScreen({ route, navigation }: ProductProps) {
           onPress={handleAdd}
         >
           {cartLoading ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color={colors.accentText} />
           ) : (
             <Text style={styles.addBtnText}>
               {!canBuy ? "Épuisé" : added ? "✓ Ajouté !" : "Ajouter au panier"}
@@ -147,7 +147,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
     marginBottom: 8,
   },
-  variantActive: { borderColor: colors.primary, backgroundColor: "#fde8e9" },
+  variantActive: { borderColor: colors.primary, backgroundColor: "#e3efe8" },
   variantDisabled: { opacity: 0.4 },
   variantText: { color: colors.text },
   variantTextActive: { color: colors.primary, fontWeight: "700" },
@@ -162,14 +162,14 @@ const styles = StyleSheet.create({
   },
   addBtn: {
     flex: 1,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.accent,
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: "center",
     justifyContent: "center",
   },
   addBtnDisabled: { backgroundColor: colors.muted },
-  addBtnText: { color: "#fff", fontWeight: "700", fontSize: 16 },
+  addBtnText: { color: colors.accentText, fontWeight: "700", fontSize: 16 },
   cartLink: {
     paddingHorizontal: 16,
     justifyContent: "center",

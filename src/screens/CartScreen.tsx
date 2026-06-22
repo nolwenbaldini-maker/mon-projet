@@ -94,7 +94,7 @@ export function CartScreen(_props: CartProps) {
           disabled={checkingOut || loading}
         >
           {checkingOut ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color={colors.accentText} />
           ) : (
             <Text style={styles.checkoutText}>Passer commande</Text>
           )}
@@ -133,10 +133,10 @@ const styles = StyleSheet.create({
   totalLabel: { fontSize: 16, color: colors.text },
   totalValue: { fontSize: 20, fontWeight: "800", color: colors.text },
   checkoutBtn: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.accent,
     borderRadius: 10,
     paddingVertical: 16,
     alignItems: "center",
   },
-  checkoutText: { color: "#fff", fontWeight: "700", fontSize: 16 },
+  checkoutText: { color: colors.accentText, fontWeight: "700", fontSize: 16 },
 });

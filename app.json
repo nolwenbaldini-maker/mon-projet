@@ -8,7 +8,7 @@
     "userInterfaceStyle": "light",
     "scheme": "cash16",
     "splash": {
-      "backgroundColor": "#e30613"
+      "backgroundColor": "#224f2f"
     },
     "ios": {
       "supportsTablet": true,
@@ -17,7 +17,7 @@
     "android": {
       "package": "fr.cash16.app",
       "adaptiveIcon": {
-        "backgroundColor": "#e30613",
+        "backgroundColor": "#224f2f",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"

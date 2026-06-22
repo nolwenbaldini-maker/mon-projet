@@ -1,13 +1,18 @@
-/** Palette et helpers de style partagés dans l'app €ASH. */
+/** Palette et helpers de style, alignés sur les couleurs de cash16.fr. */
 
 export const colors = {
-  primary: "#e30613", // rouge €ASH
-  dark: "#1a1a1a",
-  text: "#1a1a1a",
+  // Vert d'identité €ASH (repris du site : hsl 138 40% 22%)
+  primary: "#224f2f",
+  primaryDark: "#133a1e", // vert très foncé (hsl 138 51% 15%) — titres/textes
+  // Doré des boutons d'action du site (hsl 45 100% 50%)
+  accent: "#ffbf00",
+  accentText: "#133a1e", // texte foncé sur fond doré (bon contraste)
+  dark: "#133a1e",
+  text: "#133a1e",
   muted: "#6b7280",
   background: "#ffffff",
-  card: "#f5f5f7",
-  border: "#e5e7eb",
+  card: "#eef4f0", // vert très clair (fonds de cartes)
+  border: "#d9e6dd",
   success: "#16a34a",
 };
 
