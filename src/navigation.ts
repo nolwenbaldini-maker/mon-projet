@@ -11,6 +11,7 @@ export type RootStackParamList = {
   AdminRachats: undefined;
   AdminRachat: { id: string; title: string };
   AdminProduct: undefined;
+  AdminArgus: undefined;
   Rachat: { id: string; title: string };
 };
 

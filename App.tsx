@@ -11,6 +11,7 @@ import { AuthProvider } from "./src/context/AuthContext";
 import { CartProvider } from "./src/context/CartContext";
 import type { RootStackParamList } from "./src/navigation";
 import { AccountScreen } from "./src/screens/AccountScreen";
+import { AdminArgusScreen } from "./src/screens/AdminArgusScreen";
 import { AdminProductScreen } from "./src/screens/AdminProductScreen";
 import { AdminRachatScreen } from "./src/screens/AdminRachatScreen";
 import { AdminRachatsScreen } from "./src/screens/AdminRachatsScreen";
@@ -102,6 +103,11 @@ export default function App() {
               name="AdminProduct"
               component={AdminProductScreen}
               options={{ title: "Publier un produit" }}
+            />
+            <Stack.Screen
+              name="AdminArgus"
+              component={AdminArgusScreen}
+              options={{ title: "Gérer l'argus" }}
             />
             <Stack.Screen
               name="Rachat"

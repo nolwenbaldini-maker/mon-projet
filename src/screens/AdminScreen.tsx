@@ -28,6 +28,20 @@ export function AdminScreen() {
 
       <TouchableOpacity
         style={styles.card}
+        onPress={() => navigation.navigate("AdminArgus")}
+      >
+        <Text style={styles.cardEmoji}>📈</Text>
+        <View style={styles.cardBody}>
+          <Text style={styles.cardTitle}>Gérer l'argus</Text>
+          <Text style={styles.cardSub}>
+            Consulter les cotes (smartphones, consoles) et les actualiser
+          </Text>
+        </View>
+        <Text style={styles.chevron}>›</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.card}
         onPress={() => navigation.navigate("AdminProduct")}
       >
         <Text style={styles.cardEmoji}>🏷️</Text>
