@@ -2,6 +2,8 @@ import { useNavigation } from "@react-navigation/native";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -12,11 +14,24 @@ import {
   View,
 } from "react-native";
 import { useAuth } from "../context/AuthContext";
-import type { CustomerOrder } from "../shopify/customer";
-import { colors, formatMoney } from "../theme";
+import { isSupabaseConfigured } from "../config/supabase";
+import { colors } from "../theme";
 
 export function AccountScreen() {
-  const { customer, initializing } = useAuth();
+  const { user, initializing } = useAuth();
+
+  if (!isSupabaseConfigured()) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.infoTitle}>Connexion à configurer</Text>
+        <Text style={styles.infoText}>
+          Renseigne <Text style={styles.code}>EXPO_PUBLIC_SUPABASE_URL</Text> et{" "}
+          <Text style={styles.code}>EXPO_PUBLIC_SUPABASE_ANON_KEY</Text> dans le
+          fichier <Text style={styles.code}>.env</Text>.
+        </Text>
+      </View>
+    );
+  }
 
   if (initializing) {
     return (
@@ -26,29 +41,47 @@ export function AccountScreen() {
     );
   }
 
-  return customer ? <Profile /> : <AuthForm />;
+  return user ? <Profile /> : <AuthForm />;
 }
 
 /* ------------------------- Connexion / Inscription ------------------------- */
 
 function AuthForm() {
-  const { login, signup, busy } = useAuth();
+  const { signInWithGoogle, signInWithEmail, signUpWithEmail, busy } = useAuth();
   const [mode, setMode] = useState<"login" | "signup">("login");
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
+  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  async function submit() {
+  async function google() {
+    setError(null);
+    try {
+      await signInWithGoogle();
+    } catch (e: any) {
+      setError(e.message ?? "La connexion Google a échoué.");
+    }
+  }
+
+  async function submitEmail() {
     setError(null);
     if (!email || !password) {
       setError("Renseigne ton email et ton mot de passe.");
       return;
     }
     try {
-      if (mode === "login") await login(email, password);
-      else await signup(email, password, firstName, lastName);
+      if (mode === "login") {
+        await signInWithEmail(email, password);
+      } else {
+        const needsConfirm = await signUpWithEmail(email, password, fullName);
+        if (needsConfirm) {
+          Alert.alert(
+            "Vérifie tes emails 📧",
+            "Un email de confirmation t'a été envoyé. Clique sur le lien, puis connecte-toi."
+          );
+          setMode("login");
+        }
+      }
     } catch (e: any) {
       setError(e.message ?? "Une erreur est survenue.");
     }
@@ -64,28 +97,29 @@ function AuthForm() {
           {mode === "login" ? "Connexion" : "Créer un compte"}
         </Text>
         <Text style={styles.formSubtitle}>
-          {mode === "login"
-            ? "Connecte-toi pour suivre tes commandes."
-            : "Crée ton compte €ASH pour commander plus vite."}
+          Tes identifiants sont les mêmes que sur le site cash16.fr.
         </Text>
 
+        {/* Connexion Google (gérée par Supabase, comme le site) */}
+        <TouchableOpacity style={styles.googleBtn} onPress={google} disabled={busy}>
+          <Text style={styles.googleG}>G</Text>
+          <Text style={styles.googleText}>Continuer avec Google</Text>
+        </TouchableOpacity>
+
+        <View style={styles.sepRow}>
+          <View style={styles.sepLine} />
+          <Text style={styles.sepText}>ou</Text>
+          <View style={styles.sepLine} />
+        </View>
+
         {mode === "signup" && (
-          <>
-            <TextInput
-              style={styles.input}
-              placeholder="Prénom"
-              placeholderTextColor={colors.muted}
-              value={firstName}
-              onChangeText={setFirstName}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Nom"
-              placeholderTextColor={colors.muted}
-              value={lastName}
-              onChangeText={setLastName}
-            />
-          </>
+          <TextInput
+            style={styles.input}
+            placeholder="Nom complet"
+            placeholderTextColor={colors.muted}
+            value={fullName}
+            onChangeText={setFullName}
+          />
         )}
         <TextInput
           style={styles.input}
@@ -107,7 +141,7 @@ function AuthForm() {
 
         {error && <Text style={styles.error}>{error}</Text>}
 
-        <TouchableOpacity style={styles.primaryBtn} onPress={submit} disabled={busy}>
+        <TouchableOpacity style={styles.primaryBtn} onPress={submitEmail} disabled={busy}>
           {busy ? (
             <ActivityIndicator color={colors.accentText} />
           ) : (
@@ -138,23 +172,35 @@ function AuthForm() {
 /* ------------------------------- Profil ------------------------------------ */
 
 function Profile() {
-  const { customer, logout } = useAuth();
+  const { user, signOut } = useAuth();
   const navigation = useNavigation<any>();
-  if (!customer) return null;
+  if (!user) return null;
+
+  const meta = user.user_metadata || {};
+  const name: string = meta.full_name || meta.name || "";
+  const avatar: string | undefined = meta.avatar_url || meta.picture;
 
   return (
     <ScrollView style={styles.flex} contentContainerStyle={styles.profile}>
       <View style={styles.profileHeader}>
-        <Text style={styles.hello}>Bonjour {customer.firstName || ""} 👋</Text>
-        <Text style={styles.email}>{customer.email}</Text>
+        {avatar ? (
+          <Image source={{ uri: avatar }} style={styles.avatar} />
+        ) : (
+          <View style={[styles.avatar, styles.avatarFallback]}>
+            <Text style={styles.avatarLetter}>
+              {(name || user.email || "?").charAt(0).toUpperCase()}
+            </Text>
+          </View>
+        )}
+        <Text style={styles.hello}>Bonjour {name || "👋"}</Text>
+        <Text style={styles.email}>{user.email}</Text>
       </View>
 
       <Text style={styles.sectionTitle}>Mes commandes</Text>
-      {customer.orders.length === 0 ? (
-        <Text style={styles.empty}>Tu n'as pas encore de commande.</Text>
-      ) : (
-        customer.orders.map((o) => <OrderCard key={o.id} order={o} />)
-      )}
+      <Text style={styles.empty}>
+        Le suivi de tes commandes dans l'app arrive bientôt. En attendant, tu
+        reçois tes confirmations par email.
+      </Text>
 
       <TouchableOpacity
         style={styles.adminBtn}
@@ -163,60 +209,11 @@ function Profile() {
         <Text style={styles.adminText}>🛠️ Espace admin</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
+      <TouchableOpacity style={styles.logoutBtn} onPress={signOut}>
         <Text style={styles.logoutText}>Se déconnecter</Text>
       </TouchableOpacity>
     </ScrollView>
   );
-}
-
-function OrderCard({ order }: { order: CustomerOrder }) {
-  const date = new Date(order.processedAt).toLocaleDateString("fr-FR");
-  return (
-    <View style={styles.order}>
-      <View style={styles.orderTop}>
-        <Text style={styles.orderName}>{order.name}</Text>
-        <Text style={styles.orderTotal}>
-          {formatMoney(order.total.amount, order.total.currencyCode)}
-        </Text>
-      </View>
-      <Text style={styles.orderDate}>{date}</Text>
-      <Text style={styles.orderStatus}>
-        {translateFulfillment(order.fulfillmentStatus)} ·{" "}
-        {translateFinancial(order.financialStatus)}
-      </Text>
-      <Text style={styles.orderItems} numberOfLines={2}>
-        {order.lineItems.map((l) => `${l.quantity}× ${l.title}`).join(", ")}
-      </Text>
-    </View>
-  );
-}
-
-function translateFulfillment(status: string | null): string {
-  switch (status) {
-    case "FULFILLED":
-      return "Expédiée";
-    case "IN_PROGRESS":
-    case "PARTIALLY_FULFILLED":
-      return "En préparation";
-    case "UNFULFILLED":
-      return "À préparer";
-    default:
-      return "En cours";
-  }
-}
-
-function translateFinancial(status: string | null): string {
-  switch (status) {
-    case "PAID":
-      return "Payée";
-    case "PENDING":
-      return "Paiement en attente";
-    case "REFUNDED":
-      return "Remboursée";
-    default:
-      return status ?? "";
-  }
 }
 
 const styles = StyleSheet.create({
@@ -225,12 +222,35 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    padding: 24,
     backgroundColor: colors.background,
   },
+  infoTitle: { fontSize: 18, fontWeight: "700", color: colors.text, marginBottom: 10 },
+  infoText: { textAlign: "center", color: colors.muted, lineHeight: 22 },
+  code: { fontFamily: "monospace", color: colors.primary },
 
   form: { padding: 20 },
   formTitle: { fontSize: 22, fontWeight: "800", color: colors.text },
   formSubtitle: { fontSize: 14, color: colors.muted, marginTop: 6, marginBottom: 18 },
+
+  googleBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    paddingVertical: 13,
+    backgroundColor: "#fff",
+  },
+  googleG: { fontSize: 18, fontWeight: "800", color: "#4285F4" },
+  googleText: { fontSize: 15, fontWeight: "700", color: colors.text },
+
+  sepRow: { flexDirection: "row", alignItems: "center", marginVertical: 18, gap: 10 },
+  sepLine: { flex: 1, height: 1, backgroundColor: colors.border },
+  sepText: { color: colors.muted, fontSize: 13 },
+
   input: {
     borderWidth: 1,
     borderColor: colors.border,
@@ -255,27 +275,20 @@ const styles = StyleSheet.create({
   switchText: { color: colors.primary, fontWeight: "600" },
 
   profile: { padding: 20 },
-  profileHeader: { marginBottom: 24 },
-  hello: { fontSize: 22, fontWeight: "800", color: colors.text },
-  email: { fontSize: 14, color: colors.muted, marginTop: 4 },
-  sectionTitle: { fontSize: 17, fontWeight: "800", color: colors.text, marginBottom: 12 },
-  empty: { color: colors.muted },
-  order: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 12,
-    backgroundColor: colors.card,
+  profileHeader: { alignItems: "center", marginBottom: 24 },
+  avatar: { width: 80, height: 80, borderRadius: 40, marginBottom: 12 },
+  avatarFallback: {
+    backgroundColor: colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  orderTop: { flexDirection: "row", justifyContent: "space-between" },
-  orderName: { fontSize: 15, fontWeight: "700", color: colors.text },
-  orderTotal: { fontSize: 15, fontWeight: "800", color: colors.primary },
-  orderDate: { fontSize: 12, color: colors.muted, marginTop: 2 },
-  orderStatus: { fontSize: 13, color: colors.text, marginTop: 6, fontWeight: "600" },
-  orderItems: { fontSize: 13, color: colors.muted, marginTop: 4 },
+  avatarLetter: { color: "#fff", fontSize: 32, fontWeight: "800" },
+  hello: { fontSize: 20, fontWeight: "800", color: colors.text },
+  email: { fontSize: 14, color: colors.muted, marginTop: 4 },
+  sectionTitle: { fontSize: 17, fontWeight: "800", color: colors.text, marginBottom: 8 },
+  empty: { color: colors.muted, lineHeight: 20 },
   adminBtn: {
-    marginTop: 20,
+    marginTop: 24,
     backgroundColor: colors.primary,
     borderRadius: 10,
     paddingVertical: 14,
