@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useNavigation } from "@react-navigation/native";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
-  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,14 +11,13 @@ import {
 } from "react-native";
 import { ProductCard } from "../components/ProductCard";
 import { isShopifyConfigured } from "../config/shopify";
-import type { HomeProps } from "../navigation";
-import { getCollections, getProducts } from "../shopify/queries";
-import type { Collection, Product } from "../shopify/types";
+import { getProducts } from "../shopify/queries";
+import type { Product } from "../shopify/types";
 import { colors } from "../theme";
 import { UNIVERSES } from "../universes";
 
-export function HomeScreen({ navigation }: HomeProps) {
-  const [collections, setCollections] = useState<Collection[]>([]);
+export function HomeScreen() {
+  const navigation = useNavigation<any>();
   const [newProducts, setNewProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -27,8 +26,7 @@ export function HomeScreen({ navigation }: HomeProps) {
     setLoading(true);
     setError(null);
     try {
-      const [cols, prods] = await Promise.all([getCollections(), getProducts()]);
-      setCollections(cols);
+      const prods = await getProducts();
       setNewProducts(prods.slice(0, 12));
     } catch (e: any) {
       setError(e.message ?? "Impossible de charger la boutique");
@@ -46,172 +44,108 @@ export function HomeScreen({ navigation }: HomeProps) {
     load();
   }, []);
 
-  const byHandle = useMemo(() => {
-    const m = new Map<string, Collection>();
-    collections.forEach((c) => m.set(c.handle, c));
-    return m;
-  }, [collections]);
-
   if (error === "config") {
     return (
       <View style={styles.center}>
         <Text style={styles.configTitle}>Connexion Shopify à configurer</Text>
         <Text style={styles.configText}>
-          Renseigne ton domaine et ton jeton dans le fichier{"\n"}
-          <Text style={styles.code}>.env</Text> (voir le README).
+          Renseigne tes identifiants dans le fichier <Text style={styles.code}>.env</Text>.
         </Text>
-      </View>
-    );
-  }
-
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
-
-  if (error) {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.error}>{error}</Text>
-        <TouchableOpacity onPress={load} style={styles.retry}>
-          <Text style={styles.retryText}>Réessayer</Text>
-        </TouchableOpacity>
       </View>
     );
   }
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {/* Bandeau promo (comme sur le site) */}
       <View style={styles.promo}>
         <Text style={styles.promoText}>🚚 Livraison gratuite dès 100€ d'achat !</Text>
       </View>
 
       {/* Héros */}
       <View style={styles.hero}>
-        <Text style={styles.heroTitle}>
-          Votre boutique spécialisée{"\n"}Jeux Vidéo, TCG & Produits Culturels
-        </Text>
+        <Text style={styles.heroTitle}>Jeux Vidéo · TCG · Produits Culturels</Text>
         <Text style={styles.heroSubtitle}>
           Achat & vente d'occasion à Angoulême-Champniers depuis 2014
         </Text>
         <TouchableOpacity
           style={styles.heroBtn}
-          onPress={() =>
-            navigation.navigate("Collection", { handle: "", title: "Tout le catalogue" })
-          }
+          onPress={() => navigation.navigate("Collection", { handle: "", title: "Tout le catalogue" })}
         >
-          <Text style={styles.heroBtnText}>Voir tout le catalogue</Text>
+          <Text style={styles.heroBtnText}>Voir le catalogue</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Nouveautés */}
-      {newProducts.length > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>🆕 Nouveautés</Text>
-          <FlatList
-            horizontal
-            data={newProducts}
-            keyExtractor={(p) => p.id}
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.hList}
-            initialNumToRender={4}
-            removeClippedSubviews
-            renderItem={({ item: p }) => (
-              <ProductCard
-                product={p}
-                width={150}
-                onPress={() =>
-                  navigation.navigate("Product", { handle: p.handle, title: p.title })
-                }
-              />
-            )}
-          />
+      {/* Bannière estimation / rachat */}
+      <TouchableOpacity style={styles.estim} onPress={() => navigation.navigate("Rachat")}>
+        <Text style={styles.estimEmoji}>💸</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.estimTitle}>Vends tes appareils</Text>
+          <Text style={styles.estimSub}>Estime ton smartphone ou ta console en 1 minute</Text>
         </View>
-      )}
+        <Text style={styles.estimArrow}>›</Text>
+      </TouchableOpacity>
 
-      {/* Univers et leurs rubriques */}
-      {UNIVERSES.map((u) => {
-        const rubriques = u.handles
-          .map((h) => byHandle.get(h))
-          .filter((c): c is Collection => Boolean(c));
-        if (rubriques.length === 0) return null;
-        return (
-          <View key={u.key} style={styles.section}>
-            <Text style={styles.sectionTitle}>
-              {u.emoji} {u.label}
+      {/* Nos univers (accès rapide) */}
+      <Text style={styles.sectionTitle}>Nos univers</Text>
+      <View style={styles.universes}>
+        {UNIVERSES.map((u) => (
+          <TouchableOpacity
+            key={u.key}
+            style={styles.uniTile}
+            onPress={() => navigation.navigate("Categories")}
+          >
+            <Text style={styles.uniEmoji}>{u.emoji}</Text>
+            <Text style={styles.uniLabel} numberOfLines={2}>
+              {u.label}
             </Text>
-            <FlatList
-              horizontal
-              data={rubriques}
-              keyExtractor={(c) => c.id}
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.hList}
-              initialNumToRender={4}
-              removeClippedSubviews
-              renderItem={({ item: c }) => (
-                <RubriqueCard
-                  collection={c}
-                  emoji={u.emoji}
-                  onPress={() =>
-                    navigation.navigate("Collection", { handle: c.handle, title: c.title })
-                  }
-                />
-              )}
-            />
-          </View>
-        );
-      })}
+          </TouchableOpacity>
+        ))}
+      </View>
 
-      <View style={{ height: 24 }} />
-    </ScrollView>
-  );
-}
-
-/** Carte d'une rubrique (vignette + titre). */
-function RubriqueCard({
-  collection,
-  emoji,
-  onPress,
-}: {
-  collection: Collection;
-  emoji: string;
-  onPress: () => void;
-}) {
-  return (
-    <TouchableOpacity style={styles.rubrique} onPress={onPress} activeOpacity={0.85}>
-      {collection.thumbnail ? (
-        <Image source={{ uri: collection.thumbnail }} style={styles.rubriqueImg} />
-      ) : (
-        <View style={[styles.rubriqueImg, styles.rubriquePlaceholder]}>
-          <Text style={styles.rubriqueEmoji}>{emoji}</Text>
+      {/* Nouveautés */}
+      <Text style={styles.sectionTitle}>🆕 Nouveautés</Text>
+      {loading ? (
+        <ActivityIndicator color={colors.primary} style={{ marginVertical: 30 }} />
+      ) : error ? (
+        <View style={styles.center}>
+          <Text style={styles.error}>{error}</Text>
+          <TouchableOpacity onPress={load} style={styles.retry}>
+            <Text style={styles.retryText}>Réessayer</Text>
+          </TouchableOpacity>
         </View>
+      ) : (
+        <FlatList
+          horizontal
+          data={newProducts}
+          keyExtractor={(p) => p.id}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.hList}
+          initialNumToRender={4}
+          removeClippedSubviews
+          renderItem={({ item: p }) => (
+            <ProductCard
+              product={p}
+              width={150}
+              onPress={() => navigation.navigate("Product", { handle: p.handle, title: p.title })}
+            />
+          )}
+        />
       )}
-      <Text style={styles.rubriqueTitle} numberOfLines={2}>
-        {collection.title}
-      </Text>
-    </TouchableOpacity>
+
+      <View style={{ height: 28 }} />
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  center: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
-    backgroundColor: colors.background,
-  },
+  center: { alignItems: "center", justifyContent: "center", padding: 24 },
 
   promo: { backgroundColor: colors.primaryDark, paddingVertical: 8, alignItems: "center" },
   promoText: { color: "#fff", fontSize: 13, fontWeight: "600" },
 
-  hero: { backgroundColor: colors.primary, paddingHorizontal: 20, paddingVertical: 24 },
-  heroTitle: { color: "#fff", fontSize: 20, fontWeight: "800", lineHeight: 27 },
+  hero: { backgroundColor: colors.primary, paddingHorizontal: 20, paddingVertical: 22 },
+  heroTitle: { color: "#fff", fontSize: 20, fontWeight: "800" },
   heroSubtitle: { color: "#d6e6dc", fontSize: 13, marginTop: 8 },
   heroBtn: {
     alignSelf: "flex-start",
@@ -223,42 +157,36 @@ const styles = StyleSheet.create({
   },
   heroBtnText: { color: colors.accentText, fontWeight: "700", fontSize: 14 },
 
-  section: { marginTop: 20 },
-  sectionTitle: {
-    fontSize: 17,
-    fontWeight: "800",
-    color: colors.text,
-    paddingHorizontal: 16,
-    marginBottom: 10,
-  },
-  hList: { paddingHorizontal: 10 },
-
-  rubrique: { width: 130, marginHorizontal: 6 },
-  rubriqueImg: {
-    width: 130,
-    height: 130,
-    borderRadius: 12,
-    backgroundColor: colors.card,
+  estim: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    margin: 16,
+    padding: 16,
+    borderRadius: 14,
+    backgroundColor: "#fff",
     borderWidth: 1,
     borderColor: colors.border,
   },
-  rubriquePlaceholder: { alignItems: "center", justifyContent: "center" },
-  rubriqueEmoji: { fontSize: 46 },
-  rubriqueTitle: {
-    marginTop: 8,
-    fontSize: 13,
-    fontWeight: "600",
-    color: colors.text,
-    textAlign: "center",
-  },
+  estimEmoji: { fontSize: 30 },
+  estimTitle: { fontSize: 16, fontWeight: "800", color: colors.text },
+  estimSub: { fontSize: 13, color: colors.muted, marginTop: 2 },
+  estimArrow: { fontSize: 26, color: colors.muted },
 
-  error: { color: colors.primary, textAlign: "center", marginBottom: 12 },
-  retry: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    backgroundColor: colors.primary,
-    borderRadius: 8,
+  sectionTitle: { fontSize: 17, fontWeight: "800", color: colors.text, paddingHorizontal: 16, marginTop: 8, marginBottom: 12 },
+  universes: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 10, gap: 0 },
+  uniTile: {
+    width: "20%",
+    alignItems: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 4,
   },
+  uniEmoji: { fontSize: 30 },
+  uniLabel: { fontSize: 11, color: colors.text, textAlign: "center", marginTop: 5, fontWeight: "600" },
+
+  hList: { paddingHorizontal: 10 },
+  error: { color: colors.primary, textAlign: "center", marginBottom: 12 },
+  retry: { paddingHorizontal: 20, paddingVertical: 10, backgroundColor: colors.primary, borderRadius: 8 },
   retryText: { color: "#fff", fontWeight: "600" },
   configTitle: { fontSize: 18, fontWeight: "700", color: colors.text, marginBottom: 12 },
   configText: { textAlign: "center", color: colors.muted, lineHeight: 22 },

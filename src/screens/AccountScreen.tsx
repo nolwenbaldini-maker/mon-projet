@@ -253,7 +253,7 @@ function Profile() {
                 key={r.id}
                 style={styles.rowCard}
                 onPress={() =>
-                  navigation.navigate("Rachat", {
+                  navigation.navigate("RachatDetail", {
                     id: r.id,
                     title: "Rachat",
                   })

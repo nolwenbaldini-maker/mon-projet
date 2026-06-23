@@ -2,6 +2,32 @@ import { supabase } from "./supabase";
 
 /** Argus (cote de reprise) — mêmes tables et fonctions que le site cash16.fr. */
 
+/** États d'estimation côté client (libellés + descriptions repris du site). */
+export const ESTIMATION_STATES: {
+  label: string;
+  description: string;
+  priceKey: "price_perfect" | "price_good" | "price_correct";
+}[] = [
+  {
+    label: "Parfait état",
+    description:
+      "Comme neuf : aucune rayure, aucun choc visible, impeccable et parfaitement fonctionnel.",
+    priceKey: "price_perfect",
+  },
+  {
+    label: "Bon état",
+    description:
+      "Quelques micro-rayures discrètes, légères marques d'usage. Tout fonctionne normalement.",
+    priceKey: "price_good",
+  },
+  {
+    label: "État correct",
+    description:
+      "Rayures bien visibles, traces d'usure marquées, mais l'appareil fonctionne sans problème.",
+    priceKey: "price_correct",
+  },
+];
+
 export interface ArgusSmartphone {
   id: string;
   brand: string;
