@@ -16,6 +16,7 @@ import { CartScreen } from "./src/screens/CartScreen";
 import { CollectionScreen } from "./src/screens/CollectionScreen";
 import { HomeScreen } from "./src/screens/HomeScreen";
 import { ProductScreen } from "./src/screens/ProductScreen";
+import { RachatScreen } from "./src/screens/RachatScreen";
 import { colors } from "./src/theme";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -83,6 +84,11 @@ export default function App() {
               name="Admin"
               component={AdminScreen}
               options={{ title: "Espace admin" }}
+            />
+            <Stack.Screen
+              name="Rachat"
+              component={RachatScreen}
+              options={({ route }) => ({ title: route.params.title })}
             />
           </Stack.Navigator>
         </NavigationContainer>

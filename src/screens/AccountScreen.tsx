@@ -1,5 +1,5 @@
 import { useNavigation } from "@react-navigation/native";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -15,6 +15,14 @@ import {
 } from "react-native";
 import { useAuth } from "../context/AuthContext";
 import { isSupabaseConfigured } from "../config/supabase";
+import {
+  getLinkedOrders,
+  getRachatRequests,
+  isAdminUser,
+  type LinkedOrder,
+  type RachatRequest,
+} from "../lib/db";
+import { rachatStatusLabel } from "./RachatScreen";
 import { colors } from "../theme";
 
 export function AccountScreen() {
@@ -174,6 +182,26 @@ function AuthForm() {
 function Profile() {
   const { user, signOut } = useAuth();
   const navigation = useNavigation<any>();
+  const [orders, setOrders] = useState<LinkedOrder[]>([]);
+  const [rachats, setRachats] = useState<RachatRequest[]>([]);
+  const [admin, setAdmin] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const [o, r, a] = await Promise.all([
+        getLinkedOrders(user.id).catch(() => []),
+        getRachatRequests(user.id).catch(() => []),
+        isAdminUser(user.id),
+      ]);
+      setOrders(o);
+      setRachats(r);
+      setAdmin(a);
+      setLoading(false);
+    })();
+  }, [user?.id]);
+
   if (!user) return null;
 
   const meta = user.user_metadata || {};
@@ -196,18 +224,64 @@ function Profile() {
         <Text style={styles.email}>{user.email}</Text>
       </View>
 
-      <Text style={styles.sectionTitle}>Mes commandes</Text>
-      <Text style={styles.empty}>
-        Le suivi de tes commandes dans l'app arrive bientôt. En attendant, tu
-        reçois tes confirmations par email.
-      </Text>
+      {loading ? (
+        <ActivityIndicator color={colors.primary} style={{ marginVertical: 20 }} />
+      ) : (
+        <>
+          {/* Mes commandes */}
+          <Text style={styles.sectionTitle}>Mes commandes</Text>
+          {orders.length === 0 ? (
+            <Text style={styles.empty}>Aucune commande rattachée à ton compte.</Text>
+          ) : (
+            orders.map((o) => (
+              <View key={o.id} style={styles.rowCard}>
+                <Text style={styles.rowTitle}>{o.order_name || "Commande"}</Text>
+                {o.order_email ? (
+                  <Text style={styles.rowSub}>{o.order_email}</Text>
+                ) : null}
+              </View>
+            ))
+          )}
 
-      <TouchableOpacity
-        style={styles.adminBtn}
-        onPress={() => navigation.navigate("Admin")}
-      >
-        <Text style={styles.adminText}>🛠️ Espace admin</Text>
-      </TouchableOpacity>
+          {/* Mes rachats */}
+          <Text style={[styles.sectionTitle, { marginTop: 22 }]}>Mes rachats</Text>
+          {rachats.length === 0 ? (
+            <Text style={styles.empty}>Aucune demande de rachat pour le moment.</Text>
+          ) : (
+            rachats.map((r) => (
+              <TouchableOpacity
+                key={r.id}
+                style={styles.rowCard}
+                onPress={() =>
+                  navigation.navigate("Rachat", {
+                    id: r.id,
+                    title: "Rachat",
+                  })
+                }
+              >
+                <View style={styles.rowTop}>
+                  <Text style={styles.rowTitle} numberOfLines={1}>
+                    {r.description || "Demande de rachat"}
+                  </Text>
+                  <Text style={styles.badge}>{rachatStatusLabel(r.status)}</Text>
+                </View>
+                <Text style={styles.rowSub}>
+                  {new Date(r.created_at).toLocaleDateString("fr-FR")} · voir la conversation ›
+                </Text>
+              </TouchableOpacity>
+            ))
+          )}
+        </>
+      )}
+
+      {admin && (
+        <TouchableOpacity
+          style={styles.adminBtn}
+          onPress={() => navigation.navigate("Admin")}
+        >
+          <Text style={styles.adminText}>🛠️ Espace admin</Text>
+        </TouchableOpacity>
+      )}
 
       <TouchableOpacity style={styles.logoutBtn} onPress={signOut}>
         <Text style={styles.logoutText}>Se déconnecter</Text>
@@ -287,6 +361,27 @@ const styles = StyleSheet.create({
   email: { fontSize: 14, color: colors.muted, marginTop: 4 },
   sectionTitle: { fontSize: 17, fontWeight: "800", color: colors.text, marginBottom: 8 },
   empty: { color: colors.muted, lineHeight: 20 },
+  rowCard: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+    backgroundColor: colors.card,
+  },
+  rowTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  rowTitle: { flex: 1, fontSize: 15, fontWeight: "700", color: colors.text },
+  rowSub: { fontSize: 13, color: colors.muted, marginTop: 4 },
+  badge: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.accentText,
+    backgroundColor: colors.accent,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    overflow: "hidden",
+  },
   adminBtn: {
     marginTop: 24,
     backgroundColor: colors.primary,

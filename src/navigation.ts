@@ -8,6 +8,7 @@ export type RootStackParamList = {
   Cart: undefined;
   Account: undefined;
   Admin: undefined;
+  Rachat: { id: string; title: string };
 };
 
 export type HomeProps = NativeStackScreenProps<RootStackParamList, "Home">;
@@ -15,3 +16,4 @@ export type CollectionProps = NativeStackScreenProps<RootStackParamList, "Collec
 export type ProductProps = NativeStackScreenProps<RootStackParamList, "Product">;
 export type CartProps = NativeStackScreenProps<RootStackParamList, "Cart">;
 export type AccountProps = NativeStackScreenProps<RootStackParamList, "Account">;
+export type RachatProps = NativeStackScreenProps<RootStackParamList, "Rachat">;
