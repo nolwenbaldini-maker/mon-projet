@@ -15,13 +15,8 @@ import {
 } from "react-native";
 import { useAuth } from "../context/AuthContext";
 import { isSupabaseConfigured } from "../config/supabase";
-import {
-  getLinkedOrders,
-  getRachatRequests,
-  isAdminUser,
-  type LinkedOrder,
-  type RachatRequest,
-} from "../lib/db";
+import { getRachatRequests, isAdminUser, type RachatRequest } from "../lib/db";
+import { getCustomerOrders, fulfillmentLabel, type CustomerOrder } from "../lib/orders";
 import { rachatStatusLabel } from "./RachatScreen";
 import { colors } from "../theme";
 
@@ -182,7 +177,7 @@ function AuthForm() {
 function Profile() {
   const { user, signOut } = useAuth();
   const navigation = useNavigation<any>();
-  const [orders, setOrders] = useState<LinkedOrder[]>([]);
+  const [orders, setOrders] = useState<CustomerOrder[]>([]);
   const [rachats, setRachats] = useState<RachatRequest[]>([]);
   const [admin, setAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -191,7 +186,7 @@ function Profile() {
     if (!user) return;
     (async () => {
       const [o, r, a] = await Promise.all([
-        getLinkedOrders(user.id).catch(() => []),
+        user.email ? getCustomerOrders(user.email).catch(() => []) : Promise.resolve([]),
         getRachatRequests(user.id).catch(() => []),
         isAdminUser(user.id),
       ]);
@@ -231,17 +226,30 @@ function Profile() {
           {/* Mes commandes */}
           <Text style={styles.sectionTitle}>Mes commandes</Text>
           {orders.length === 0 ? (
-            <Text style={styles.empty}>Aucune commande rattachée à ton compte.</Text>
+            <Text style={styles.empty}>Aucune commande pour le moment.</Text>
           ) : (
-            orders.map((o) => (
-              <View key={o.id} style={styles.rowCard}>
-                <Text style={styles.rowTitle}>{o.order_name || "Commande"}</Text>
-                {o.order_email ? (
-                  <Text style={styles.rowSub}>{o.order_email}</Text>
-                ) : null}
-              </View>
+            orders.map((o, idx) => (
+              <TouchableOpacity
+                key={`${o.orderName}-${idx}`}
+                style={styles.rowCard}
+                onPress={() => navigation.navigate("OrderDetail", { order: o })}
+              >
+                <View style={styles.rowTop}>
+                  <Text style={styles.rowTitle} numberOfLines={1}>{o.orderName}</Text>
+                  <Text style={styles.badge}>{fulfillmentLabel(o.fulfillmentStatus).label}</Text>
+                </View>
+                <Text style={styles.rowSub}>
+                  {o.date ? new Date(o.date).toLocaleDateString("fr-FR") : ""} · voir le suivi ›
+                </Text>
+              </TouchableOpacity>
             ))
           )}
+          <TouchableOpacity
+            style={styles.trackByNumber}
+            onPress={() => navigation.navigate("OrderTrack")}
+          >
+            <Text style={styles.trackByNumberText}>🔎 Suivre une commande par numéro</Text>
+          </TouchableOpacity>
 
           {/* Mes rachats */}
           <Text style={[styles.sectionTitle, { marginTop: 22 }]}>Mes rachats</Text>
@@ -372,6 +380,15 @@ const styles = StyleSheet.create({
   rowTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   rowTitle: { flex: 1, fontSize: 15, fontWeight: "700", color: colors.text },
   rowSub: { fontSize: 13, color: colors.muted, marginTop: 4 },
+  trackByNumber: {
+    marginTop: 4,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: "center",
+  },
+  trackByNumberText: { color: colors.text, fontWeight: "600" },
   badge: {
     fontSize: 12,
     fontWeight: "700",

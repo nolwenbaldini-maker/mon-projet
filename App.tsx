@@ -14,6 +14,8 @@ import { AdminRachatsScreen } from "./src/screens/AdminRachatsScreen";
 import { AdminScreen } from "./src/screens/AdminScreen";
 import { CartScreen } from "./src/screens/CartScreen";
 import { CollectionScreen } from "./src/screens/CollectionScreen";
+import { OrderDetailScreen } from "./src/screens/OrderDetailScreen";
+import { OrderTrackScreen } from "./src/screens/OrderTrackScreen";
 import { ProductScreen } from "./src/screens/ProductScreen";
 import { RachatRequestScreen } from "./src/screens/RachatRequestScreen";
 import { RachatScreen } from "./src/screens/RachatScreen";
@@ -66,6 +68,17 @@ export default function App() {
               name="RachatDetail"
               component={RachatScreen}
               options={({ route }) => ({ title: route.params.title })}
+            />
+
+            <Stack.Screen
+              name="OrderDetail"
+              component={OrderDetailScreen}
+              options={{ title: "Suivi de commande" }}
+            />
+            <Stack.Screen
+              name="OrderTrack"
+              component={OrderTrackScreen}
+              options={{ title: "Suivre une commande" }}
             />
 
             <Stack.Screen name="Admin" component={AdminScreen} options={{ title: "Espace admin" }} />
