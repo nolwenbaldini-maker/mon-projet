@@ -24,7 +24,7 @@ export function MainTabs() {
         headerRight: () => <CartButton onPress={() => (navigation as any).navigate("Cart")} />,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.muted,
-        tabBarStyle: { height: 58, paddingBottom: 6, paddingTop: 6 },
+        tabBarStyle: { paddingTop: 6 },
         tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
       })}
     >
