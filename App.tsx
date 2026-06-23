@@ -11,6 +11,9 @@ import { AuthProvider } from "./src/context/AuthContext";
 import { CartProvider } from "./src/context/CartContext";
 import type { RootStackParamList } from "./src/navigation";
 import { AccountScreen } from "./src/screens/AccountScreen";
+import { AdminProductScreen } from "./src/screens/AdminProductScreen";
+import { AdminRachatScreen } from "./src/screens/AdminRachatScreen";
+import { AdminRachatsScreen } from "./src/screens/AdminRachatsScreen";
 import { AdminScreen } from "./src/screens/AdminScreen";
 import { CartScreen } from "./src/screens/CartScreen";
 import { CollectionScreen } from "./src/screens/CollectionScreen";
@@ -84,6 +87,21 @@ export default function App() {
               name="Admin"
               component={AdminScreen}
               options={{ title: "Espace admin" }}
+            />
+            <Stack.Screen
+              name="AdminRachats"
+              component={AdminRachatsScreen}
+              options={{ title: "Gérer les rachats" }}
+            />
+            <Stack.Screen
+              name="AdminRachat"
+              component={AdminRachatScreen}
+              options={({ route }) => ({ title: route.params.title })}
+            />
+            <Stack.Screen
+              name="AdminProduct"
+              component={AdminProductScreen}
+              options={{ title: "Publier un produit" }}
             />
             <Stack.Screen
               name="Rachat"

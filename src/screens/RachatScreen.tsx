@@ -14,32 +14,19 @@ import type { RachatProps } from "../navigation";
 import { getRachatMessages, sendRachatMessage, type RachatMessage } from "../lib/db";
 import { colors } from "../theme";
 
+/** Statuts de rachat utilisés par cash16.fr (valeur en base → libellé FR). */
+export const RACHAT_STATUSES: { value: string; label: string }[] = [
+  { value: "en_attente", label: "En attente" },
+  { value: "estime", label: "Estimé" },
+  { value: "accepte", label: "Accepté" },
+  { value: "refuse", label: "Refusé" },
+  { value: "termine", label: "Terminé" },
+];
+
 /** Traduit le statut d'un rachat en français. */
 export function rachatStatusLabel(status: string | null): string {
-  switch ((status || "").toLowerCase()) {
-    case "pending":
-    case "en_attente":
-    case "nouveau":
-      return "En attente";
-    case "in_progress":
-    case "en_cours":
-      return "En cours";
-    case "accepted":
-    case "accepte":
-    case "offer":
-    case "offre":
-      return "Offre proposée";
-    case "completed":
-    case "termine":
-    case "done":
-      return "Terminé";
-    case "rejected":
-    case "refuse":
-    case "declined":
-      return "Refusé";
-    default:
-      return status || "—";
-  }
+  const found = RACHAT_STATUSES.find((s) => s.value === (status || "").toLowerCase());
+  return found ? found.label : status || "—";
 }
 
 export function RachatScreen({ route }: RachatProps) {

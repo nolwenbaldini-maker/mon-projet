@@ -77,6 +77,53 @@ export async function sendRachatMessage(requestId: string, content: string): Pro
   if (error) throw error;
 }
 
+/* ----------------------------- Côté admin --------------------------------- */
+
+/** (Admin) Toutes les demandes de rachat. RLS autorise selon le rôle admin. */
+export async function getAllRachatRequests(): Promise<RachatRequest[]> {
+  const { data, error } = await supabase
+    .from("rachat_requests")
+    .select("id, description, photo_urls, status, admin_notes, created_at")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data ?? [];
+}
+
+/** (Admin) Une demande de rachat par son id. */
+export async function getRachatRequestById(id: string): Promise<RachatRequest | null> {
+  const { data, error } = await supabase
+    .from("rachat_requests")
+    .select("id, description, photo_urls, status, admin_notes, created_at")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+/** (Admin) Met à jour le statut et les notes internes d'un rachat. */
+export async function updateRachatRequest(
+  id: string,
+  status: string,
+  adminNotes: string | null
+): Promise<void> {
+  const { error } = await supabase
+    .from("rachat_requests")
+    .update({ status, admin_notes: adminNotes })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+/** (Admin) Répond dans la conversation d'un rachat. */
+export async function sendAdminRachatMessage(
+  requestId: string,
+  content: string
+): Promise<void> {
+  const { error } = await supabase
+    .from("rachat_messages")
+    .insert({ request_id: requestId, sender: "admin", content });
+  if (error) throw error;
+}
+
 /** Vrai si l'utilisateur a le rôle admin (table user_roles). */
 export async function isAdminUser(userId: string): Promise<boolean> {
   try {
