@@ -15,8 +15,8 @@ import {
 } from "react-native";
 import { useAuth } from "../context/AuthContext";
 import { isSupabaseConfigured } from "../config/supabase";
-import { getRachatRequests, isAdminUser, type RachatRequest } from "../lib/db";
-import { getCustomerOrders, fulfillmentLabel, type CustomerOrder } from "../lib/orders";
+import { getLinkedOrders, getRachatRequests, isAdminUser, type RachatRequest } from "../lib/db";
+import { getAllMyOrders, fulfillmentLabel, type CustomerOrder } from "../lib/orders";
 import { rachatStatusLabel } from "./RachatScreen";
 import { colors } from "../theme";
 
@@ -185,8 +185,9 @@ function Profile() {
   useEffect(() => {
     if (!user) return;
     (async () => {
+      const linked = await getLinkedOrders(user.id).catch(() => []);
       const [o, r, a] = await Promise.all([
-        user.email ? getCustomerOrders(user.email).catch(() => []) : Promise.resolve([]),
+        getAllMyOrders(user.email, linked),
         getRachatRequests(user.id).catch(() => []),
         isAdminUser(user.id),
       ]);

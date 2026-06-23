@@ -11,13 +11,15 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useAuth } from "../context/AuthContext";
 import { getOrderStatus } from "../lib/orders";
 import { colors } from "../theme";
 
 export function OrderTrackScreen() {
   const navigation = useNavigation<any>();
+  const { user } = useAuth();
   const [orderNumber, setOrderNumber] = useState("");
-  const [contact, setContact] = useState("");
+  const [contact, setContact] = useState(user?.email ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

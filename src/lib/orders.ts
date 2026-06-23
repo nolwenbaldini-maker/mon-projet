@@ -71,6 +71,64 @@ export async function getCustomerOrders(email: string): Promise<CustomerOrder[]>
   return (list as any[]).map(normalizeOrder);
 }
 
+/** Commandes récupérées par numéro/nom de commande. */
+export async function getCustomerOrdersByName(orderName: string): Promise<CustomerOrder[]> {
+  const { data, error } = await supabase.functions.invoke("get-customer-orders", {
+    body: { orderName },
+  });
+  if (error) return [];
+  const list = Array.isArray(data) ? data : data?.orders ?? data?.data ?? [];
+  return (list as any[]).map(normalizeOrder);
+}
+
+/** Commande minimale (repli si on ne récupère que le numéro). */
+export function minimalOrder(orderName: string): CustomerOrder {
+  return {
+    orderName,
+    financialStatus: null,
+    fulfillmentStatus: null,
+    total: null,
+    currency: "EUR",
+    date: null,
+    lineItems: [],
+    tracking: [],
+    statusUrl: null,
+  };
+}
+
+/**
+ * Toutes les commandes du client : celles de l'email du compte + celles
+ * rattachées (linked_orders), souvent passées avec un autre email.
+ */
+export async function getAllMyOrders(
+  userEmail: string | undefined,
+  linked: { order_name: string | null; order_email: string | null }[]
+): Promise<CustomerOrder[]> {
+  const byName = new Map<string, CustomerOrder>();
+  const add = (list: CustomerOrder[]) =>
+    list.forEach((o) => {
+      if (!byName.has(o.orderName)) byName.set(o.orderName, o);
+    });
+
+  if (userEmail) add(await getCustomerOrders(userEmail).catch(() => []));
+
+  for (const lo of linked) {
+    let fetched: CustomerOrder[] = [];
+    if (lo.order_email && lo.order_email !== userEmail) {
+      fetched = await getCustomerOrders(lo.order_email).catch(() => []);
+    }
+    if (!fetched.length && lo.order_name) {
+      fetched = await getCustomerOrdersByName(lo.order_name).catch(() => []);
+    }
+    if (fetched.length) add(fetched);
+    else if (lo.order_name && !byName.has(lo.order_name)) {
+      byName.set(lo.order_name, minimalOrder(lo.order_name));
+    }
+  }
+
+  return Array.from(byName.values());
+}
+
 /** Suivi d'une commande par son numéro + un contact (email ou téléphone). */
 export async function getOrderStatus(
   orderNumber: string,
