@@ -48,6 +48,24 @@ export const CATEGORY_LABEL: Record<ProductCategory, string> = {
   carte: "🃏 Carte",
 };
 
+/** Extrait le vrai message d'erreur renvoyé par une Edge Function (corps de la réponse). */
+async function readFunctionError(error: any): Promise<string> {
+  try {
+    const ctx = error?.context;
+    if (ctx && typeof ctx.json === "function") {
+      const body = await ctx.clone().json().catch(() => null);
+      if (body) return body.error || body.message || JSON.stringify(body);
+    }
+    if (ctx && typeof ctx.text === "function") {
+      const txt = await ctx.text().catch(() => "");
+      if (txt) return txt;
+    }
+  } catch {
+    /* ignore */
+  }
+  return error?.message || "Échec de la publication.";
+}
+
 /** Appelle une fonction Lovable Cloud de création de produit Shopify. */
 export async function createShopifyProduct(
   category: ProductCategory,
@@ -55,6 +73,9 @@ export async function createShopifyProduct(
 ): Promise<any> {
   const fn = CATEGORY_FUNCTION[category];
   const { data, error } = await supabase.functions.invoke(fn, { body });
-  if (error) throw new Error(error.message || "Échec de la publication.");
+  if (error) {
+    const detail = await readFunctionError(error);
+    throw new Error(detail);
+  }
   return data;
 }
