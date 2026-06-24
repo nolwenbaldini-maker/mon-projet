@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { RachatProps } from "../navigation";
 import { getRachatMessages, sendRachatMessage, type RachatMessage } from "../lib/db";
 import { colors } from "../theme";
@@ -31,6 +32,7 @@ export function rachatStatusLabel(status: string | null): string {
 
 export function RachatScreen({ route }: RachatProps) {
   const { id } = route.params;
+  const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState<RachatMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState("");
@@ -102,7 +104,7 @@ export function RachatScreen({ route }: RachatProps) {
         )}
       </ScrollView>
 
-      <View style={styles.inputRow}>
+      <View style={[styles.inputRow, { paddingBottom: insets.bottom + 8 }]}>
         <TextInput
           style={styles.input}
           placeholder="Ton message…"

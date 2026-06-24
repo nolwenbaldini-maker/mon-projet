@@ -67,7 +67,7 @@ export async function getProducts(collectionHandle?: string): Promise<Product[]>
       ${PRODUCT_FRAGMENT}
       query CollectionProducts($handle: String!) {
         collection(handle: $handle) {
-          products(first: 50) {
+          products(first: 100) {
             edges { node { ...ProductFields } }
           }
         }
@@ -75,19 +75,23 @@ export async function getProducts(collectionHandle?: string): Promise<Product[]>
     `;
     const data = await shopifyRequest<any>(query, { handle: collectionHandle });
     if (!data.collection) return [];
-    return data.collection.products.edges.map((e: any) => flattenProduct(e.node));
+    return data.collection.products.edges
+      .map((e: any) => flattenProduct(e.node))
+      .filter((p: Product) => p.availableForSale); // masque les produits en rupture
   }
 
   const query = /* GraphQL */ `
     ${PRODUCT_FRAGMENT}
     query AllProducts {
-      products(first: 50, sortKey: CREATED_AT, reverse: true) {
+      products(first: 100, sortKey: CREATED_AT, reverse: true) {
         edges { node { ...ProductFields } }
       }
     }
   `;
   const data = await shopifyRequest<any>(query);
-  return data.products.edges.map((e: any) => flattenProduct(e.node));
+  return data.products.edges
+    .map((e: any) => flattenProduct(e.node))
+    .filter((p: Product) => p.availableForSale); // masque les produits en rupture
 }
 
 /** Récupère un produit par son handle, avec toutes ses photos. */

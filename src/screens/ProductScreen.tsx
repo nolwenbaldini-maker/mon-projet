@@ -11,6 +11,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCart } from "../context/CartContext";
 import type { ProductProps } from "../navigation";
 import { getProductByHandle } from "../shopify/queries";
@@ -19,6 +20,7 @@ import { colors, formatMoney } from "../theme";
 
 export function ProductScreen({ route, navigation }: ProductProps) {
   const { handle } = route.params;
+  const insets = useSafeAreaInsets();
   const { addToCart, loading: cartLoading } = useCart();
 
   const [product, setProduct] = useState<Product | null>(null);
@@ -113,7 +115,7 @@ export function ProductScreen({ route, navigation }: ProductProps) {
       </ScrollView>
 
       {/* Barre d'achat fixe en bas */}
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: insets.bottom + 8 }]}>
         <TouchableOpacity
           style={[styles.addBtn, (!canBuy || cartLoading) && styles.addBtnDisabled]}
           disabled={!canBuy || cartLoading}

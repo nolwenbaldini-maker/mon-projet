@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   getRachatMessages,
   getRachatRequestById,
@@ -26,6 +27,7 @@ import { RACHAT_STATUSES } from "./RachatScreen";
 
 export function AdminRachatScreen({ route }: AdminRachatProps) {
   const { id } = route.params;
+  const insets = useSafeAreaInsets();
   const [request, setRequest] = useState<RachatRequest | null>(null);
   const [messages, setMessages] = useState<RachatMessage[]>([]);
   const [status, setStatus] = useState<string>("en_attente");
@@ -165,7 +167,7 @@ export function AdminRachatScreen({ route }: AdminRachatProps) {
         )}
       </ScrollView>
 
-      <View style={styles.inputRow}>
+      <View style={[styles.inputRow, { paddingBottom: insets.bottom + 8 }]}>
         <TextInput
           style={styles.replyInput}
           placeholder="Répondre au client…"

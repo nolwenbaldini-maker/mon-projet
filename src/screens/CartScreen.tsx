@@ -9,11 +9,13 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCart } from "../context/CartContext";
 import type { CartProps } from "../navigation";
 import { colors, formatMoney } from "../theme";
 
 export function CartScreen(_props: CartProps) {
+  const insets = useSafeAreaInsets();
   const { cart, removeLine, loading } = useCart();
   const [checkingOut, setCheckingOut] = useState(false);
 
@@ -78,7 +80,7 @@ export function CartScreen(_props: CartProps) {
         }}
       />
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: insets.bottom + 8 }]}>
         <View style={styles.totalRow}>
           <Text style={styles.totalLabel}>Total</Text>
           <Text style={styles.totalValue}>
