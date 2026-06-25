@@ -16,6 +16,30 @@
 //   (price présent => met aussi à jour le prix de la variante principale)
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+// Vérifie que l'appelant est bien un admin (table user_roles), côté serveur.
+// La protection « contrôle admin » de Lovable doit RESTER active : ceci est
+// une sécurité supplémentaire, pas un remplacement.
+async function assertAdmin(req: Request): Promise<void> {
+  const authHeader = req.headers.get("Authorization") ?? "";
+  const url = Deno.env.get("SUPABASE_URL") ?? "";
+  const anon = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+  if (!authHeader) throw new Error("AUTH: connexion requise.");
+  const sb = createClient(url, anon, {
+    global: { headers: { Authorization: authHeader } },
+  });
+  const { data: userData, error: userErr } = await sb.auth.getUser();
+  if (userErr || !userData?.user) throw new Error("AUTH: session invalide.");
+  const { data: roles } = await sb
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userData.user.id);
+  const isAdmin = (roles ?? []).some(
+    (r: any) => String(r.role).toLowerCase() === "admin"
+  );
+  if (!isAdmin) throw new Error("AUTH: accès réservé aux administrateurs.");
+}
 
 const DOMAIN =
   Deno.env.get("SHOPIFY_STORE_DOMAIN") ??
@@ -73,6 +97,9 @@ serve(async (req) => {
     });
 
   try {
+    // Sécurité : seul un administrateur connecté peut agir sur les stocks/prix.
+    await assertAdmin(req);
+
     const { action, productId, available, price } = await req.json();
 
     // Diagnostic : ne révèle PAS le jeton, seulement sa présence/forme.
@@ -151,6 +178,8 @@ serve(async (req) => {
 
     return json({ error: "action inconnue" }, 400);
   } catch (e) {
-    return json({ error: String((e as Error)?.message ?? e) }, 500);
+    const msg = String((e as Error)?.message ?? e);
+    const status = msg.startsWith("AUTH:") ? 403 : 500;
+    return json({ error: msg }, status);
   }
 });
