@@ -63,20 +63,21 @@ serve(async (req) => {
   try {
     const { action, productId, available, price } = await req.json();
 
-    // Variante principale + emplacement d'inventaire
+    // Variante principale + article d'inventaire
     const prod = await shopify(`/products/${productId}.json`);
     const variant = prod.product.variants[0];
     const invItem = variant.inventory_item_id;
-    const { locations } = await shopify(`/locations.json`);
-    const loc = locations.find((l: any) => l.active) ?? locations[0];
 
-    async function readAvailable() {
+    // Niveau d'inventaire existant → on en déduit l'emplacement SANS lister les
+    // emplacements (évite le scope read_locations, non accordé sur l'app).
+    async function readLevel() {
       const lvl = await shopify(`/inventory_levels.json?inventory_item_ids=${invItem}`);
-      return lvl.inventory_levels?.[0]?.available ?? 0;
+      return lvl.inventory_levels?.[0] ?? null;
     }
 
     if (action === "get") {
-      return json({ available: await readAvailable(), price: variant.price });
+      const level = await readLevel();
+      return json({ available: level?.available ?? 0, price: variant.price });
     }
 
     if (action === "set") {
@@ -90,17 +91,31 @@ serve(async (req) => {
       if (hasPrice) variantPatch.price = Number(price).toFixed(2);
       await shopify(`/variants/${variant.id}.json`, "PUT", { variant: variantPatch });
 
-      try {
-        await shopify(`/inventory_levels/connect.json`, "POST", {
-          location_id: loc.id,
-          inventory_item_id: invItem,
-        });
-      } catch (_) {
-        // déjà rattaché : on continue
+      // Emplacement : celui du niveau existant. Sinon, on tente la liste des
+      // emplacements (nécessite read_locations) en dernier recours seulement.
+      let level = await readLevel();
+      let locationId = level?.location_id;
+      if (!locationId) {
+        try {
+          const { locations } = await shopify(`/locations.json`);
+          const loc = locations.find((l: any) => l.active) ?? locations[0];
+          locationId = loc?.id;
+          if (locationId) {
+            await shopify(`/inventory_levels/connect.json`, "POST", {
+              location_id: locationId,
+              inventory_item_id: invItem,
+            }).catch(() => {});
+          }
+        } catch (_) {
+          throw new Error(
+            "Impossible de trouver l'emplacement de stock. Active le suivi de stock sur ce produit dans Shopify, ou accorde le scope read_locations."
+          );
+        }
       }
+
       const newAvail = Math.max(0, Number(available) || 0);
       await shopify(`/inventory_levels/set.json`, "POST", {
-        location_id: loc.id,
+        location_id: locationId,
         inventory_item_id: invItem,
         available: newAvail,
       });
