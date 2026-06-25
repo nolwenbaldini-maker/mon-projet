@@ -9,6 +9,8 @@
 export interface Universe {
   key: string;
   label: string;
+  /** Libellé court pour le sélecteur (chips). */
+  short: string;
   emoji: string;
   /** Handles des collections Shopify de cet univers, dans l'ordre d'affichage. */
   handles: string[];
@@ -18,6 +20,7 @@ export const UNIVERSES: Universe[] = [
   {
     key: "cartes",
     label: "Cartes à collectionner",
+    short: "Cartes",
     emoji: "🃏",
     handles: [
       "cartes-pokemon-francaises",
@@ -33,6 +36,7 @@ export const UNIVERSES: Universe[] = [
   {
     key: "culturels",
     label: "Produits Culturels",
+    short: "Culture",
     emoji: "🎬",
     handles: [
       "dvd-action",
@@ -49,6 +53,7 @@ export const UNIVERSES: Universe[] = [
   {
     key: "consoles",
     label: "Consoles de Jeux",
+    short: "Consoles",
     emoji: "🎮",
     handles: [
       "console-switch",
@@ -66,6 +71,7 @@ export const UNIVERSES: Universe[] = [
   {
     key: "jeux",
     label: "Jeux Vidéo",
+    short: "Jeux",
     emoji: "👾",
     handles: [
       "jeux-switch",
@@ -83,6 +89,7 @@ export const UNIVERSES: Universe[] = [
   {
     key: "hightech",
     label: "High-Tech & Accessoires",
+    short: "High-Tech",
     emoji: "🎧",
     handles: [
       "telephones",
