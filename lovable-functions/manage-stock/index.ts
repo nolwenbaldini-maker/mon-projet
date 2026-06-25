@@ -112,8 +112,9 @@ serve(async (req) => {
 
     const { action, productId, available, price } = await req.json();
 
-    // Diagnostic : ne révèle PAS le jeton, seulement les NOMS des variables
-    // liées à Shopify (jamais leur valeur) + combien ressemblent à un jeton Admin.
+    // Diagnostic : ne révèle PAS le jeton. Liste les variables Shopify (noms)
+    // et TESTE réellement le jeton contre /shop.json sur plusieurs versions
+    // d'API, pour savoir si le jeton est valide (200) ou périmé (401).
     if (action === "diag") {
       const env = Deno.env.toObject();
       const vars: Record<string, number> = {};
@@ -123,12 +124,31 @@ serve(async (req) => {
         if (/shopify|shop|token/i.test(name)) vars[name] = v.length; // nom + longueur, jamais la valeur
         if (v.startsWith("shpat_")) shpatCount++;
       }
+      // Test du jeton sur quelques versions d'API.
+      const versions = ["2025-04", "2025-07", "2025-10", "2026-01", "2024-10"];
+      const shopTests: Record<string, string> = {};
+      for (const ver of versions) {
+        try {
+          const r = await fetch(`https://${DOMAIN}/admin/api/${ver}/shop.json`, {
+            headers: { "X-Shopify-Access-Token": TOKEN },
+          });
+          let shopName = "";
+          if (r.ok) {
+            const b = await r.json().catch(() => ({}));
+            shopName = b?.shop?.myshopify_domain || b?.shop?.name || "ok";
+          }
+          shopTests[ver] = r.ok ? `200 (${shopName})` : String(r.status);
+        } catch (err) {
+          shopTests[ver] = "ERR " + String((err as Error)?.message ?? err).slice(0, 40);
+        }
+      }
       return json({
         domain: DOMAIN || "(vide)",
         tokenLooksAdmin: TOKEN.startsWith("shpat_"),
         tokenLength: TOKEN.length,
         shpatCount,
         tokenVarsPresent: vars,
+        shopTests,
       });
     }
 

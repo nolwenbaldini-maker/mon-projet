@@ -16,11 +16,25 @@ export interface AdminProduct {
   productType: string | null;
 }
 
-/** Détaille l'état/grade d'un produit à partir de ses balises. */
-function pickCondition(tags: string[]): string | null {
+/**
+ * Détaille l'état/grade d'un produit.
+ * Sur cette boutique, le grade est stocké comme une OPTION de variante nommée
+ * « État » (ex. options: [{name:"État", values:["Très bon"]}]). On le récupère
+ * là en priorité ; à défaut on regarde les balises.
+ */
+function pickCondition(options: { name: string; values: string[] }[], tags: string[]): string | null {
+  const etat = (options ?? []).find((o) => {
+    const n = (o.name || "").toLowerCase();
+    return n === "état" || n === "etat" || n.includes("état") || n.includes("etat");
+  });
+  if (etat?.values?.length) {
+    // Plusieurs grades sous un même produit : on les joint.
+    return etat.values.join(", ");
+  }
+  // Repli : un tag qui correspond à un état connu.
   const lc = CONDITIONS.map((c) => c.toLowerCase());
-  for (const t of tags) {
-    const i = lc.indexOf(t.trim().toLowerCase());
+  for (const t of tags ?? []) {
+    const i = lc.indexOf(String(t).trim().toLowerCase());
     if (i >= 0) return CONDITIONS[i];
   }
   return null;
@@ -38,6 +52,7 @@ export async function searchAdminProducts(query: string): Promise<AdminProduct[]
             availableForSale
             productType
             tags
+            options { name values }
             featuredImage { url(transform: { maxWidth: 200, maxHeight: 200 }) }
             priceRange { minVariantPrice { amount currencyCode } }
           }
@@ -48,6 +63,7 @@ export async function searchAdminProducts(query: string): Promise<AdminProduct[]
   const data = await shopifyRequest<any>(gql, { q: query || undefined });
   return data.products.edges.map((e: any) => {
     const tags: string[] = e.node.tags ?? [];
+    const options = e.node.options ?? [];
     const amount = e.node.priceRange?.minVariantPrice?.amount;
     return {
       gid: e.node.id,
@@ -56,7 +72,7 @@ export async function searchAdminProducts(query: string): Promise<AdminProduct[]
       image: e.node.featuredImage?.url ?? null,
       availableForSale: e.node.availableForSale,
       price: amount != null ? String(amount) : null,
-      condition: pickCondition(tags),
+      condition: pickCondition(options, tags),
       tags,
       productType: e.node.productType || null,
     };
@@ -103,11 +119,19 @@ export async function diagStock(): Promise<string> {
     if (error) return await fnError(error);
     if (!data) return "réponse vide";
     const vars = Object.keys(data.tokenVarsPresent ?? {});
+    const tests = data.shopTests
+      ? Object.entries(data.shopTests)
+          .map(([v, r]) => `   ${v}: ${r}`)
+          .join("\n")
+      : "(non testé)";
     return [
       `domaine: ${data.domain}`,
       `jeton Admin détecté: ${data.tokenLooksAdmin ? "oui (shpat_…)" : "NON"}`,
       `longueur jeton: ${data.tokenLength}`,
-      `variables présentes: ${vars.length ? vars.join(", ") : "aucune"}`,
+      `jetons shpat_ trouvés: ${data.shpatCount ?? "?"}`,
+      `variables: ${vars.length ? vars.join(", ") : "aucune"}`,
+      `test du jeton sur Shopify:`,
+      tests,
     ].join("\n");
   } catch (e: any) {
     return e?.message ?? "diagnostic indisponible";
