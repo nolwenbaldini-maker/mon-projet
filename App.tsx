@@ -13,6 +13,7 @@ import { AdminProductScreen } from "./src/screens/AdminProductScreen";
 import { AdminRachatScreen } from "./src/screens/AdminRachatScreen";
 import { AdminRachatsScreen } from "./src/screens/AdminRachatsScreen";
 import { AdminScreen } from "./src/screens/AdminScreen";
+import { AdminStockScreen } from "./src/screens/AdminStockScreen";
 import { CartScreen } from "./src/screens/CartScreen";
 import { CollectionScreen } from "./src/screens/CollectionScreen";
 import { OrderDetailScreen } from "./src/screens/OrderDetailScreen";
@@ -92,6 +93,7 @@ export default function App() {
               />
               <Stack.Screen name="AdminProduct" component={AdminProductScreen} options={{ title: "Publier un produit" }} />
               <Stack.Screen name="AdminArgus" component={AdminArgusScreen} options={{ title: "Gérer l'argus" }} />
+            <Stack.Screen name="AdminStock" component={AdminStockScreen} options={{ title: "Gérer les stocks" }} />
             </Stack.Navigator>
           </NavigationContainer>
         </CartProvider>

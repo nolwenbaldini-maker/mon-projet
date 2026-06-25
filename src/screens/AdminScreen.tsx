@@ -28,6 +28,20 @@ export function AdminScreen() {
 
       <TouchableOpacity
         style={styles.card}
+        onPress={() => navigation.navigate("AdminStock")}
+      >
+        <Text style={styles.cardEmoji}>📦</Text>
+        <View style={styles.cardBody}>
+          <Text style={styles.cardTitle}>Gérer les stocks</Text>
+          <Text style={styles.cardSub}>
+            Augmenter / diminuer le stock, mettre en rupture
+          </Text>
+        </View>
+        <Text style={styles.chevron}>›</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.card}
         onPress={() => navigation.navigate("AdminArgus")}
       >
         <Text style={styles.cardEmoji}>📈</Text>

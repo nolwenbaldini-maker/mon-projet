@@ -24,6 +24,7 @@ export type RootStackParamList = {
   AdminRachat: { id: string; title: string };
   AdminProduct: undefined;
   AdminArgus: undefined;
+  AdminStock: undefined;
 };
 
 export type CollectionProps = NativeStackScreenProps<RootStackParamList, "Collection">;
