@@ -65,12 +65,19 @@ const TOKEN_VAR_NAMES = [
   "SHOPIFY_STOREFRONT_ADMIN_TOKEN",
 ];
 function pickToken(): string {
-  const present = TOKEN_VAR_NAMES.map((n) => (Deno.env.get(n) || "").trim()).filter(Boolean);
-  // 1) un vrai jeton Admin custom app commence par "shpat_"
-  const admin = present.find((v) => v.startsWith("shpat_"));
-  if (admin) return admin;
-  // 2) sinon, la première variable non vide
-  return present[0] ?? "";
+  const env = Deno.env.toObject();
+  // 1) N'IMPORTE quelle variable dont la valeur ressemble à un jeton Admin
+  //    custom app ("shpat_…"), peu importe son nom.
+  const anyShpat = Object.values(env)
+    .map((v) => (v || "").trim())
+    .find((v) => v.startsWith("shpat_"));
+  if (anyShpat) return anyShpat;
+  // 2) sinon, une des variables candidates connues, non vide
+  for (const n of TOKEN_VAR_NAMES) {
+    const v = (Deno.env.get(n) || "").trim();
+    if (v) return v;
+  }
+  return "";
 }
 const TOKEN = pickToken();
 const API = `https://${DOMAIN}/admin/api/2025-04`;
@@ -105,17 +112,22 @@ serve(async (req) => {
 
     const { action, productId, available, price } = await req.json();
 
-    // Diagnostic : ne révèle PAS le jeton, seulement sa présence/forme.
+    // Diagnostic : ne révèle PAS le jeton, seulement les NOMS des variables
+    // liées à Shopify (jamais leur valeur) + combien ressemblent à un jeton Admin.
     if (action === "diag") {
+      const env = Deno.env.toObject();
       const vars: Record<string, number> = {};
-      for (const n of TOKEN_VAR_NAMES) {
-        const v = (Deno.env.get(n) || "").trim();
-        if (v) vars[n] = v.length; // longueur seulement, jamais la valeur
+      let shpatCount = 0;
+      for (const [name, value] of Object.entries(env)) {
+        const v = (value || "").trim();
+        if (/shopify|shop|token/i.test(name)) vars[name] = v.length; // nom + longueur, jamais la valeur
+        if (v.startsWith("shpat_")) shpatCount++;
       }
       return json({
         domain: DOMAIN || "(vide)",
         tokenLooksAdmin: TOKEN.startsWith("shpat_"),
         tokenLength: TOKEN.length,
+        shpatCount,
         tokenVarsPresent: vars,
       });
     }
