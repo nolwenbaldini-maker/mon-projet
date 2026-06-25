@@ -46,6 +46,7 @@ export function AdminStockScreen() {
   // Éditeur (modal)
   const [editing, setEditing] = useState<AdminProduct | null>(null);
   const [info, setInfo] = useState<StockInfo | null>(null);
+  const [infoErr, setInfoErr] = useState<string | null>(null);
   const [loadingInfo, setLoadingInfo] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -64,14 +65,16 @@ export function AdminStockScreen() {
   async function openEditor(p: AdminProduct) {
     setEditing(p);
     setInfo(null);
+    setInfoErr(null);
     setLoadingInfo(true);
     try {
       const i = await getStockInfo(p.id);
       // À défaut de prix renvoyé par la fonction, on retombe sur celui de la liste.
       if (i.price == null && p.price != null) i.price = Number(p.price);
       setInfo(i);
-    } catch {
+    } catch (e: any) {
       setInfo(null);
+      setInfoErr(e?.message ?? "Erreur inconnue");
     } finally {
       setLoadingInfo(false);
     }
@@ -170,9 +173,12 @@ export function AdminStockScreen() {
             {loadingInfo ? (
               <ActivityIndicator color={colors.primary} style={{ marginVertical: 24 }} />
             ) : info === null ? (
-              <Text style={styles.modalErr}>
-                Stock indisponible. La fonction « manage-stock » est-elle déployée côté Lovable ?
-              </Text>
+              <>
+                <Text style={styles.modalErr}>
+                  Stock indisponible. La fonction « manage-stock » a renvoyé une erreur :
+                </Text>
+                <Text style={styles.modalErrDetail}>{infoErr ?? "erreur inconnue"}</Text>
+              </>
             ) : (
               <StockEditor
                 initialStock={info.available ?? 0}
@@ -316,7 +322,16 @@ const styles = StyleSheet.create({
   modalCard: { backgroundColor: "#fff", borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 22 },
   modalTitle: { fontSize: 18, fontWeight: "800", color: colors.text },
   modalSub: { fontSize: 13, color: colors.muted, marginTop: 4 },
-  modalErr: { color: "#dc2626", marginVertical: 20, lineHeight: 20 },
+  modalErr: { color: "#dc2626", marginTop: 20, marginBottom: 6, lineHeight: 20 },
+  modalErrDetail: {
+    color: "#7f1d1d",
+    backgroundColor: "#fde8e8",
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 12,
+    fontFamily: "monospace",
+    marginBottom: 14,
+  },
   fieldLabel: { fontSize: 14, fontWeight: "700", color: colors.muted, marginTop: 18, marginBottom: 8 },
   priceInput: {
     borderWidth: 1,

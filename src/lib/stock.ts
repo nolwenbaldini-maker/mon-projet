@@ -64,14 +64,29 @@ export async function searchAdminProducts(query: string): Promise<AdminProduct[]
 }
 
 async function fnError(error: any): Promise<string> {
+  const ctx = error?.context;
+  const status = ctx?.status;
+  // Corps de la réponse de la fonction (message réel renvoyé par Lovable).
   try {
-    const ctx = error?.context;
-    if (ctx?.json) {
-      const b = await ctx.clone().json().catch(() => null);
-      if (b) return b.error || b.message || JSON.stringify(b);
+    if (ctx && typeof ctx.clone === "function") {
+      const cloned = ctx.clone();
+      const b = await cloned.json().catch(() => null);
+      if (b) {
+        const msg = b.error || b.message || JSON.stringify(b);
+        return status ? `[${status}] ${msg}` : msg;
+      }
+      const txt = await ctx.text?.().catch(() => "");
+      if (txt) return status ? `[${status}] ${txt}` : txt;
     }
   } catch {}
-  return error?.message || "Erreur stock.";
+  if (status === 404) {
+    return "404 — fonction « manage-stock » introuvable (pas déployée côté Lovable ?).";
+  }
+  if (status) return `[${status}] ${error?.message || "erreur"}`;
+  // Pas de réponse HTTP du tout : réseau / fonction injoignable.
+  return error?.message
+    ? `${error.message} (fonction injoignable ?)`
+    : "Fonction injoignable (réseau ou déploiement).";
 }
 
 export interface StockInfo {
