@@ -86,12 +86,12 @@ export function AdminProductScreen() {
       // 1) Upload des photos → URLs publiques (bucket product-photos)
       const imageUrls = images.length ? await uploadImages("product-photos", images, "prod") : [];
 
-      // 2) Corps adapté à la catégorie
+      // 2) Corps adapté à la catégorie (prix/stock en texte, comme le site)
       const base = {
         title: title.trim(),
         condition,
-        price: Number(price.replace(",", ".")),
-        stock: Number(stock) || 0,
+        price: price.replace(",", ".").trim(),
+        stock: stock.trim() || "0",
         description: description.trim(),
         imageUrls,
       };
