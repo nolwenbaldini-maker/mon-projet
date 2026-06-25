@@ -114,19 +114,22 @@ export async function createShopifyProduct(
   // Les cartes nécessitent une 2e étape pour être réellement publiées sur la boutique.
   if (category === "carte") {
     const productId = extractProductId(data);
-    if (productId) {
-      const { error: pubErr } = await supabase.functions.invoke("create-shopify-card", {
-        body: { action: "publish_existing", productId },
-      });
-      if (pubErr) {
-        const detail = await readFunctionError(pubErr);
-        throw new Error("Produit créé mais publication échouée : " + detail);
-      }
-    } else {
+    if (!productId) {
       throw new Error(
         "Produit créé mais identifiant introuvable pour la publication. Vérifie dans Shopify."
       );
     }
+    // Shopify peut ne pas être prêt juste après la création : on attend et on réessaie.
+    let lastErr = "Shopify publish error";
+    for (let attempt = 0; attempt < 4; attempt++) {
+      await new Promise((r) => setTimeout(r, 2500));
+      const { error: pubErr } = await supabase.functions.invoke("create-shopify-card", {
+        body: { action: "publish_existing", productId },
+      });
+      if (!pubErr) return data; // publié avec succès
+      lastErr = await readFunctionError(pubErr);
+    }
+    throw new Error("Produit créé mais publication échouée : " + lastErr);
   }
 
   return data;
