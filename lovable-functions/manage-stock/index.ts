@@ -41,11 +41,14 @@ async function assertAdmin(req: Request): Promise<void> {
   if (!isAdmin) throw new Error("AUTH: accès réservé aux administrateurs.");
 }
 
+// Domaine de la boutique (public, pas un secret). On lit d'abord les variables
+// d'environnement ; à défaut on retombe sur le domaine connu de la boutique,
+// pour éviter une URL vide (erreur DNS "https://admin/...").
 const DOMAIN =
-  Deno.env.get("SHOPIFY_STORE_DOMAIN") ??
-  Deno.env.get("SHOPIFY_SHOP_DOMAIN") ??
-  Deno.env.get("SHOPIFY_DOMAIN") ??
-  "";
+  (Deno.env.get("SHOPIFY_STORE_DOMAIN") ||
+    Deno.env.get("SHOPIFY_SHOP_DOMAIN") ||
+    Deno.env.get("SHOPIFY_DOMAIN") ||
+    "happycash16.myshopify.com").trim();
 
 // Choix du jeton Admin : on regarde TOUTES les variables candidates et on
 // privilégie celle qui ressemble à un vrai jeton Admin (préfixe "shpat_"),
