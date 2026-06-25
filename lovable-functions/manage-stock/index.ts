@@ -17,10 +17,22 @@
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 
-const DOMAIN = Deno.env.get("SHOPIFY_STORE_DOMAIN")!;
+const DOMAIN =
+  Deno.env.get("SHOPIFY_STORE_DOMAIN") ??
+  Deno.env.get("SHOPIFY_SHOP_DOMAIN") ??
+  Deno.env.get("SHOPIFY_DOMAIN") ??
+  "";
+// IMPORTANT : doit pointer vers le MÊME secret que tes fonctions create-shopify-*.
+// On tente tous les noms courants pour retrouver le jeton Admin déjà configuré.
 const TOKEN =
   Deno.env.get("SHOPIFY_ADMIN_TOKEN") ??
   Deno.env.get("SHOPIFY_ADMIN_ACCESS_TOKEN") ??
+  Deno.env.get("SHOPIFY_ADMIN_API_ACCESS_TOKEN") ??
+  Deno.env.get("SHOPIFY_ADMIN_API_TOKEN") ??
+  Deno.env.get("SHOPIFY_ACCESS_TOKEN") ??
+  Deno.env.get("SHOPIFY_API_TOKEN") ??
+  Deno.env.get("SHOPIFY_API_ACCESS_TOKEN") ??
+  Deno.env.get("SHOPIFY_STOREFRONT_ADMIN_TOKEN") ??
   "";
 const API = `https://${DOMAIN}/admin/api/2025-04`;
 
