@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 import {
+  diagStock,
   getStockInfo,
   saveStockPrice,
   searchAdminProducts,
@@ -74,7 +75,10 @@ export function AdminStockScreen() {
       setInfo(i);
     } catch (e: any) {
       setInfo(null);
-      setInfoErr(e?.message ?? "Erreur inconnue");
+      const base = e?.message ?? "Erreur inconnue";
+      // Diagnostic auto pour aider à corriger la config côté Lovable.
+      const diag = await diagStock();
+      setInfoErr(`${base}\n\n— Diagnostic —\n${diag}`);
     } finally {
       setLoadingInfo(false);
     }

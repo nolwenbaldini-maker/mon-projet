@@ -22,18 +22,30 @@ const DOMAIN =
   Deno.env.get("SHOPIFY_SHOP_DOMAIN") ??
   Deno.env.get("SHOPIFY_DOMAIN") ??
   "";
-// IMPORTANT : doit pointer vers le MÊME secret que tes fonctions create-shopify-*.
-// On tente tous les noms courants pour retrouver le jeton Admin déjà configuré.
-const TOKEN =
-  Deno.env.get("SHOPIFY_ADMIN_TOKEN") ??
-  Deno.env.get("SHOPIFY_ADMIN_ACCESS_TOKEN") ??
-  Deno.env.get("SHOPIFY_ADMIN_API_ACCESS_TOKEN") ??
-  Deno.env.get("SHOPIFY_ADMIN_API_TOKEN") ??
-  Deno.env.get("SHOPIFY_ACCESS_TOKEN") ??
-  Deno.env.get("SHOPIFY_API_TOKEN") ??
-  Deno.env.get("SHOPIFY_API_ACCESS_TOKEN") ??
-  Deno.env.get("SHOPIFY_STOREFRONT_ADMIN_TOKEN") ??
-  "";
+
+// Choix du jeton Admin : on regarde TOUTES les variables candidates et on
+// privilégie celle qui ressemble à un vrai jeton Admin (préfixe "shpat_"),
+// pour éviter de tomber sur une variable vide ou un mauvais jeton (ex. le
+// jeton Storefront). Doit correspondre au secret de tes fonctions create-shopify-*.
+const TOKEN_VAR_NAMES = [
+  "SHOPIFY_ADMIN_TOKEN",
+  "SHOPIFY_ADMIN_ACCESS_TOKEN",
+  "SHOPIFY_ADMIN_API_ACCESS_TOKEN",
+  "SHOPIFY_ADMIN_API_TOKEN",
+  "SHOPIFY_ACCESS_TOKEN",
+  "SHOPIFY_API_TOKEN",
+  "SHOPIFY_API_ACCESS_TOKEN",
+  "SHOPIFY_STOREFRONT_ADMIN_TOKEN",
+];
+function pickToken(): string {
+  const present = TOKEN_VAR_NAMES.map((n) => (Deno.env.get(n) || "").trim()).filter(Boolean);
+  // 1) un vrai jeton Admin custom app commence par "shpat_"
+  const admin = present.find((v) => v.startsWith("shpat_"));
+  if (admin) return admin;
+  // 2) sinon, la première variable non vide
+  return present[0] ?? "";
+}
+const TOKEN = pickToken();
 const API = `https://${DOMAIN}/admin/api/2025-04`;
 
 const cors = {
@@ -62,6 +74,21 @@ serve(async (req) => {
 
   try {
     const { action, productId, available, price } = await req.json();
+
+    // Diagnostic : ne révèle PAS le jeton, seulement sa présence/forme.
+    if (action === "diag") {
+      const vars: Record<string, number> = {};
+      for (const n of TOKEN_VAR_NAMES) {
+        const v = (Deno.env.get(n) || "").trim();
+        if (v) vars[n] = v.length; // longueur seulement, jamais la valeur
+      }
+      return json({
+        domain: DOMAIN || "(vide)",
+        tokenLooksAdmin: TOKEN.startsWith("shpat_"),
+        tokenLength: TOKEN.length,
+        tokenVarsPresent: vars,
+      });
+    }
 
     // Variante principale + article d'inventaire
     const prod = await shopify(`/products/${productId}.json`);

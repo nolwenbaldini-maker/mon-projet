@@ -94,6 +94,26 @@ export interface StockInfo {
   price: number | null;
 }
 
+/** Diagnostic de configuration (domaine + présence du jeton, jamais sa valeur). */
+export async function diagStock(): Promise<string> {
+  try {
+    const { data, error } = await supabase.functions.invoke("manage-stock", {
+      body: { action: "diag" },
+    });
+    if (error) return await fnError(error);
+    if (!data) return "réponse vide";
+    const vars = Object.keys(data.tokenVarsPresent ?? {});
+    return [
+      `domaine: ${data.domain}`,
+      `jeton Admin détecté: ${data.tokenLooksAdmin ? "oui (shpat_…)" : "NON"}`,
+      `longueur jeton: ${data.tokenLength}`,
+      `variables présentes: ${vars.length ? vars.join(", ") : "aucune"}`,
+    ].join("\n");
+  } catch (e: any) {
+    return e?.message ?? "diagnostic indisponible";
+  }
+}
+
 /** Lit le stock et le prix actuels d'un produit (variante principale). */
 export async function getStockInfo(productId: number): Promise<StockInfo> {
   const { data, error } = await supabase.functions.invoke("manage-stock", {
