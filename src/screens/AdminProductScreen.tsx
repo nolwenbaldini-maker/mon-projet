@@ -16,6 +16,7 @@ import {
 import { uploadImages } from "../lib/storage";
 import {
   CATEGORY_LABEL,
+  CATEGORY_OPTIONS,
   CONDITIONS,
   CONSOLE_TAGS,
   createShopifyProduct,
@@ -76,6 +77,10 @@ export function AdminProductScreen() {
       Alert.alert("Champs requis", "Le titre et le prix sont obligatoires.");
       return;
     }
+    if (CATEGORY_OPTIONS[category] && !cat) {
+      Alert.alert("Catégorie requise", "Choisis une catégorie dans la liste.");
+      return;
+    }
     setBusy(true);
     try {
       // 1) Upload des photos → URLs publiques (bucket product-photos)
@@ -131,7 +136,7 @@ export function AdminProductScreen() {
         <Text style={styles.label}>Catégorie</Text>
         <View style={styles.wrapRow}>
           {CATEGORIES.map((c) => (
-            <Chip key={c} label={CATEGORY_LABEL[c]} active={category === c} onPress={() => setCategory(c)} />
+            <Chip key={c} label={CATEGORY_LABEL[c]} active={category === c} onPress={() => { setCategory(c); setCat(""); }} />
           ))}
         </View>
 
@@ -187,27 +192,22 @@ export function AdminProductScreen() {
         {(category === "dvd" || category === "manga" || category === "informatique") && (
           <>
             <Text style={styles.label}>Catégorie / rayon</Text>
-            <TextInput
-              style={styles.input}
-              placeholder={
-                category === "dvd"
-                  ? "Ex : action, comedie, science-fiction, thriller, blu-ray…"
-                  : category === "informatique"
-                  ? "Ex : clavier, souris, casque, pc-portable, telephone, montre"
-                  : "Ex : manga, dvd-manga"
-              }
-              placeholderTextColor={colors.muted}
-              autoCapitalize="none"
-              value={cat}
-              onChangeText={setCat}
-            />
+            <View style={styles.wrapRow}>
+              {(CATEGORY_OPTIONS[category] || []).map((opt) => (
+                <Chip key={opt} label={opt} active={cat === opt} onPress={() => setCat(opt)} />
+              ))}
+            </View>
           </>
         )}
 
         {category === "carte" && (
           <>
             <Text style={styles.label}>Catégorie</Text>
-            <TextInput style={styles.input} placeholder="Ex : pokemon-fr, pokemon-jp, one-piece…" placeholderTextColor={colors.muted} autoCapitalize="none" value={cat} onChangeText={setCat} />
+            <View style={styles.wrapRow}>
+              {(CATEGORY_OPTIONS.carte || []).map((opt) => (
+                <Chip key={opt} label={opt} active={cat === opt} onPress={() => setCat(opt)} />
+              ))}
+            </View>
             <View style={styles.row}>
               <View style={styles.half}>
                 <Text style={styles.label}>N° carte (opt.)</Text>

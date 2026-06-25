@@ -48,6 +48,31 @@ export const CATEGORY_LABEL: Record<ProductCategory, string> = {
   carte: "🃏 Carte",
 };
 
+/** Valeurs de "catégorie" attendues par les fonctions, par type (reprises du site). */
+export const CATEGORY_OPTIONS: Partial<Record<ProductCategory, string[]>> = {
+  carte: ["Pokémon FR", "Pokémon JAP", "One Piece FR", "One Piece US"],
+  dvd: [
+    "DVD Action",
+    "DVD Comédie",
+    "DVD Fantastique",
+    "DVD Science-fiction",
+    "DVD Thriller",
+    "DVD Marvel/DC",
+    "DVD Manga",
+    "Blu-ray",
+  ],
+  manga: ["Manga"],
+  informatique: [
+    "Claviers",
+    "Souris",
+    "Casques",
+    "PC portables",
+    "Téléphones",
+    "Montres connectées",
+    "Accessoires",
+  ],
+};
+
 /** Extrait le vrai message d'erreur renvoyé par une Edge Function (corps de la réponse). */
 async function readFunctionError(error: any): Promise<string> {
   try {
