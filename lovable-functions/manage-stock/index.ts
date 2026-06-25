@@ -8,9 +8,12 @@
 //                          les scopes write_inventory + read/write_products
 //
 // Contrat (corps JSON) :
-//   { action: "get", productId: number }                 -> { available: number }
-//   { action: "set", productId: number, available: number } -> { available: number }
+//   { action: "get", productId: number }
+//        -> { available: number, price: string }
+//   { action: "set", productId: number, available: number, price?: number }
+//        -> { available: number, price: string }
 //   (available = 0  => rupture => le produit disparaît du site)
+//   (price présent => met aussi à jour le prix de la variante principale)
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 
@@ -46,7 +49,7 @@ serve(async (req) => {
     });
 
   try {
-    const { action, productId, available } = await req.json();
+    const { action, productId, available, price } = await req.json();
 
     // Variante principale + emplacement d'inventaire
     const prod = await shopify(`/products/${productId}.json`);
@@ -55,17 +58,26 @@ serve(async (req) => {
     const { locations } = await shopify(`/locations.json`);
     const loc = locations.find((l: any) => l.active) ?? locations[0];
 
-    if (action === "get") {
+    async function readAvailable() {
       const lvl = await shopify(`/inventory_levels.json?inventory_item_ids=${invItem}`);
-      const a = lvl.inventory_levels?.[0]?.available ?? 0;
-      return json({ available: a });
+      return lvl.inventory_levels?.[0]?.available ?? 0;
+    }
+
+    if (action === "get") {
+      return json({ available: await readAvailable(), price: variant.price });
     }
 
     if (action === "set") {
-      // S'assure que le suivi de stock est activé
-      await shopify(`/variants/${variant.id}.json`, "PUT", {
-        variant: { id: variant.id, inventory_management: "shopify", inventory_policy: "deny" },
-      });
+      // S'assure que le suivi de stock est activé (+ met à jour le prix si fourni)
+      const variantPatch: Record<string, unknown> = {
+        id: variant.id,
+        inventory_management: "shopify",
+        inventory_policy: "deny",
+      };
+      const hasPrice = price !== undefined && price !== null && !Number.isNaN(Number(price));
+      if (hasPrice) variantPatch.price = Number(price).toFixed(2);
+      await shopify(`/variants/${variant.id}.json`, "PUT", { variant: variantPatch });
+
       try {
         await shopify(`/inventory_levels/connect.json`, "POST", {
           location_id: loc.id,
@@ -74,12 +86,13 @@ serve(async (req) => {
       } catch (_) {
         // déjà rattaché : on continue
       }
+      const newAvail = Math.max(0, Number(available) || 0);
       await shopify(`/inventory_levels/set.json`, "POST", {
         location_id: loc.id,
         inventory_item_id: invItem,
-        available: Math.max(0, Number(available) || 0),
+        available: newAvail,
       });
-      return json({ available: Math.max(0, Number(available) || 0) });
+      return json({ available: newAvail, price: hasPrice ? Number(price).toFixed(2) : variant.price });
     }
 
     return json({ error: "action inconnue" }, 400);
