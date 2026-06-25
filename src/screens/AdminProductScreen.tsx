@@ -19,6 +19,7 @@ import {
   CATEGORY_OPTIONS,
   CONDITIONS,
   CONSOLE_TAGS,
+  PLATFORM_GROUPS,
   createShopifyProduct,
   type ProductCategory,
 } from "../lib/products";
@@ -36,8 +37,8 @@ export function AdminProductScreen() {
   const [images, setImages] = useState<string[]>([]);
 
   // Champs spécifiques
-  const [platform, setPlatform] = useState(CONSOLE_TAGS[0].value);
-  const [platformGroup, setPlatformGroup] = useState("");
+  const [platformGroup, setPlatformGroup] = useState(PLATFORM_GROUPS[0].label);
+  const [platform, setPlatform] = useState(PLATFORM_GROUPS[0].platforms[0]);
   const [consoleTag, setConsoleTag] = useState(CONSOLE_TAGS[0].value);
   const [cat, setCat] = useState(""); // category libre (dvd/manga/info/carte)
   const [cardNumber, setCardNumber] = useState("");
@@ -97,7 +98,7 @@ export function AdminProductScreen() {
       };
       let body: Record<string, any> = base;
       if (category === "jeu_video") {
-        body = { ...base, platform, platformGroup: platformGroup.trim() || undefined };
+        body = { ...base, platform, platformGroup };
       } else if (category === "console") {
         body = { ...base, consoleTag };
       } else if (category === "dvd" || category === "manga" || category === "informatique") {
@@ -167,14 +168,23 @@ export function AdminProductScreen() {
         {/* Champs spécifiques selon la catégorie */}
         {category === "jeu_video" && (
           <>
-            <Text style={styles.label}>Plateforme</Text>
+            <Text style={styles.label}>Marque</Text>
             <View style={styles.wrapRow}>
-              {CONSOLE_TAGS.map((t) => (
-                <Chip key={t.value} label={t.label} active={platform === t.value} onPress={() => setPlatform(t.value)} />
+              {PLATFORM_GROUPS.map((g) => (
+                <Chip
+                  key={g.label}
+                  label={g.label}
+                  active={platformGroup === g.label}
+                  onPress={() => { setPlatformGroup(g.label); setPlatform(g.platforms[0]); }}
+                />
               ))}
             </View>
-            <Text style={styles.label}>Groupe (optionnel)</Text>
-            <TextInput style={styles.input} placeholder="Ex : Sony, Nintendo, Microsoft…" placeholderTextColor={colors.muted} value={platformGroup} onChangeText={setPlatformGroup} />
+            <Text style={styles.label}>Plateforme</Text>
+            <View style={styles.wrapRow}>
+              {(PLATFORM_GROUPS.find((g) => g.label === platformGroup)?.platforms || []).map((p) => (
+                <Chip key={p} label={p} active={platform === p} onPress={() => setPlatform(p)} />
+              ))}
+            </View>
           </>
         )}
 

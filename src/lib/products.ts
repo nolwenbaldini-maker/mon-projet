@@ -18,6 +18,20 @@ export const CONSOLE_TAGS: { value: string; label: string }[] = [
   { value: "vintages", label: "Consoles vintages" },
 ];
 
+/** Groupes + plateformes pour les JEUX VIDÉO (repris du site). */
+export const PLATFORM_GROUPS: { label: string; platforms: string[] }[] = [
+  {
+    label: "Nintendo",
+    platforms: ["Switch", "3DS", "DS", "Wii U", "Wii", "GameCube", "N64", "SNES", "NES", "Game Boy", "Game Boy Advance"],
+  },
+  { label: "PlayStation", platforms: ["PS5", "PS4", "PS3", "PS2", "PS1", "PSP", "PS Vita"] },
+  { label: "Xbox", platforms: ["Xbox Series X/S", "Xbox One", "Xbox 360", "Xbox Classic"] },
+  {
+    label: "Rétro/Autre",
+    platforms: ["SEGA Megadrive", "SEGA Saturn", "SEGA Dreamcast", "SEGA Master System", "Atari", "PC", "Autre"],
+  },
+];
+
 export type ProductCategory =
   | "jeu_video"
   | "console"
