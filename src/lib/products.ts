@@ -91,6 +91,14 @@ async function readFunctionError(error: any): Promise<string> {
   return error?.message || "Échec de la publication.";
 }
 
+/** Extrait l'identifiant numérique du produit depuis la réponse de création. */
+function extractProductId(data: any): number | null {
+  if (typeof data?.productId === "number") return data.productId;
+  const src = data?.admin_url || data?.adminUrl || data?.storefront_url || data?.productId || "";
+  const m = String(src).match(/(\d{6,})/);
+  return m ? Number(m[1]) : null;
+}
+
 /** Appelle une fonction Lovable Cloud de création de produit Shopify. */
 export async function createShopifyProduct(
   category: ProductCategory,
@@ -102,5 +110,24 @@ export async function createShopifyProduct(
     const detail = await readFunctionError(error);
     throw new Error(detail);
   }
+
+  // Les cartes nécessitent une 2e étape pour être réellement publiées sur la boutique.
+  if (category === "carte") {
+    const productId = extractProductId(data);
+    if (productId) {
+      const { error: pubErr } = await supabase.functions.invoke("create-shopify-card", {
+        body: { action: "publish_existing", productId },
+      });
+      if (pubErr) {
+        const detail = await readFunctionError(pubErr);
+        throw new Error("Produit créé mais publication échouée : " + detail);
+      }
+    } else {
+      throw new Error(
+        "Produit créé mais identifiant introuvable pour la publication. Vérifie dans Shopify."
+      );
+    }
+  }
+
   return data;
 }
