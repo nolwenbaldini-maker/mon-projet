@@ -20,28 +20,38 @@
 //                         efface le prix barré, retire la balise "promo")
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // Vérifie que l'appelant est bien un admin (table user_roles), côté serveur.
-// La protection « contrôle admin » de Lovable doit RESTER active : ceci est
-// une sécurité supplémentaire, pas un remplacement.
+// IMPORTANT : pas d'import externe (esm.sh) ici — uniquement des fetch bruts,
+// pour éviter que la fonction ne casse au chargement si l'import échoue.
+// La protection « contrôle admin » de Lovable reste active : ceci est une
+// sécurité supplémentaire.
 async function assertAdmin(req: Request): Promise<void> {
   const authHeader = req.headers.get("Authorization") ?? "";
-  const url = Deno.env.get("SUPABASE_URL") ?? "";
+  const url = (Deno.env.get("SUPABASE_URL") ?? "").replace(/\/$/, "");
   const anon = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+  const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? anon;
   if (!authHeader) throw new Error("AUTH: connexion requise.");
-  const sb = createClient(url, anon, {
-    global: { headers: { Authorization: authHeader } },
+  if (!url) throw new Error("AUTH: configuration Supabase manquante.");
+
+  // 1) Identité de l'appelant à partir de son jeton de session.
+  const ures = await fetch(`${url}/auth/v1/user`, {
+    headers: { Authorization: authHeader, apikey: anon },
   });
-  const { data: userData, error: userErr } = await sb.auth.getUser();
-  if (userErr || !userData?.user) throw new Error("AUTH: session invalide.");
-  const { data: roles } = await sb
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", userData.user.id);
-  const isAdmin = (roles ?? []).some(
-    (r: any) => String(r.role).toLowerCase() === "admin"
+  if (!ures.ok) throw new Error("AUTH: session invalide.");
+  const user = await ures.json().catch(() => null);
+  const uid = user?.id;
+  if (!uid) throw new Error("AUTH: session invalide.");
+
+  // 2) Rôle admin (service role pour ignorer la RLS).
+  const rres = await fetch(
+    `${url}/rest/v1/user_roles?select=role&user_id=eq.${uid}`,
+    { headers: { apikey: service, Authorization: `Bearer ${service}` } }
   );
+  const roles = rres.ok ? await rres.json().catch(() => []) : [];
+  const isAdmin =
+    Array.isArray(roles) &&
+    roles.some((r: any) => String(r.role).toLowerCase() === "admin");
   if (!isAdmin) throw new Error("AUTH: accès réservé aux administrateurs.");
 }
 
@@ -110,51 +120,56 @@ serve(async (req) => {
       headers: { ...cors, "Content-Type": "application/json" },
     });
 
+  // Corps lu une seule fois.
+  const body = await req.json().catch(() => ({}));
+  const { action, productId, available, price, promoPercent, removePromo } = body as any;
+
+  // DIAGNOSTIC : exécuté AVANT toute vérification, et le plus robuste possible,
+  // pour qu'on puisse toujours voir l'état du jeton même si le reste casse.
+  // Ne révèle PAS le jeton (seulement noms de variables + longueurs).
+  if (action === "diag") {
+    const vars: Record<string, number> = {};
+    let shpatCount = 0;
+    try {
+      const env = Deno.env.toObject();
+      for (const [name, value] of Object.entries(env)) {
+        const v = (value || "").trim();
+        if (/shopify|shop|token/i.test(name)) vars[name] = v.length;
+        if (v.startsWith("shpat_")) shpatCount++;
+      }
+    } catch (_) {
+      // toObject indisponible : on ignore, le test du jeton reste informatif.
+    }
+    const versions = ["2025-04", "2025-07", "2025-10", "2026-01", "2024-10"];
+    const shopTests: Record<string, string> = {};
+    for (const ver of versions) {
+      try {
+        const r = await fetch(`https://${DOMAIN}/admin/api/${ver}/shop.json`, {
+          headers: { "X-Shopify-Access-Token": TOKEN },
+        });
+        let shopName = "";
+        if (r.ok) {
+          const b = await r.json().catch(() => ({}));
+          shopName = b?.shop?.myshopify_domain || b?.shop?.name || "ok";
+        }
+        shopTests[ver] = r.ok ? `200 (${shopName})` : String(r.status);
+      } catch (err) {
+        shopTests[ver] = "ERR " + String((err as Error)?.message ?? err).slice(0, 40);
+      }
+    }
+    return json({
+      domain: DOMAIN || "(vide)",
+      tokenLooksAdmin: TOKEN.startsWith("shpat_"),
+      tokenLength: TOKEN.length,
+      shpatCount,
+      tokenVarsPresent: vars,
+      shopTests,
+    });
+  }
+
   try {
     // Sécurité : seul un administrateur connecté peut agir sur les stocks/prix.
     await assertAdmin(req);
-
-    const { action, productId, available, price, promoPercent, removePromo } = await req.json();
-
-    // Diagnostic : ne révèle PAS le jeton. Liste les variables Shopify (noms)
-    // et TESTE réellement le jeton contre /shop.json sur plusieurs versions
-    // d'API, pour savoir si le jeton est valide (200) ou périmé (401).
-    if (action === "diag") {
-      const env = Deno.env.toObject();
-      const vars: Record<string, number> = {};
-      let shpatCount = 0;
-      for (const [name, value] of Object.entries(env)) {
-        const v = (value || "").trim();
-        if (/shopify|shop|token/i.test(name)) vars[name] = v.length; // nom + longueur, jamais la valeur
-        if (v.startsWith("shpat_")) shpatCount++;
-      }
-      // Test du jeton sur quelques versions d'API.
-      const versions = ["2025-04", "2025-07", "2025-10", "2026-01", "2024-10"];
-      const shopTests: Record<string, string> = {};
-      for (const ver of versions) {
-        try {
-          const r = await fetch(`https://${DOMAIN}/admin/api/${ver}/shop.json`, {
-            headers: { "X-Shopify-Access-Token": TOKEN },
-          });
-          let shopName = "";
-          if (r.ok) {
-            const b = await r.json().catch(() => ({}));
-            shopName = b?.shop?.myshopify_domain || b?.shop?.name || "ok";
-          }
-          shopTests[ver] = r.ok ? `200 (${shopName})` : String(r.status);
-        } catch (err) {
-          shopTests[ver] = "ERR " + String((err as Error)?.message ?? err).slice(0, 40);
-        }
-      }
-      return json({
-        domain: DOMAIN || "(vide)",
-        tokenLooksAdmin: TOKEN.startsWith("shpat_"),
-        tokenLength: TOKEN.length,
-        shpatCount,
-        tokenVarsPresent: vars,
-        shopTests,
-      });
-    }
 
     // Variante principale + article d'inventaire
     const prod = await shopify(`/products/${productId}.json`);
