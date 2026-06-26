@@ -4,6 +4,7 @@ import {
   FlatList,
   Image,
   Modal,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -51,6 +52,22 @@ export function AdminStockScreen() {
   const [infoErr, setInfoErr] = useState<string | null>(null);
   const [loadingInfo, setLoadingInfo] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // Diagnostic (test du jeton Shopify) — toujours accessible
+  const [diagText, setDiagText] = useState<string | null>(null);
+  const [diagLoading, setDiagLoading] = useState(false);
+
+  async function runDiag() {
+    setDiagLoading(true);
+    setDiagText("");
+    try {
+      setDiagText(await diagStock());
+    } catch (e: any) {
+      setDiagText(e?.message ?? "Diagnostic indisponible.");
+    } finally {
+      setDiagLoading(false);
+    }
+  }
 
   async function search() {
     setLoading(true);
@@ -130,6 +147,10 @@ export function AdminStockScreen() {
           <Text style={styles.searchBtnText}>OK</Text>
         </TouchableOpacity>
       </View>
+
+      <TouchableOpacity style={styles.diagBtn} onPress={runDiag}>
+        <Text style={styles.diagBtnText}>🔧 Diagnostic du jeton Shopify</Text>
+      </TouchableOpacity>
 
       {loading ? (
         <ActivityIndicator color={colors.primary} style={{ marginTop: 30 }} />
@@ -212,6 +233,35 @@ export function AdminStockScreen() {
             )}
 
             <TouchableOpacity style={styles.cancel} onPress={() => setEditing(null)}>
+              <Text style={styles.cancelText}>Fermer</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Diagnostic du jeton Shopify (déroulant, toujours lisible en entier) */}
+      <Modal
+        visible={diagText !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setDiagText(null)}
+      >
+        <View style={styles.modalBg}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>🔧 Diagnostic du jeton</Text>
+            <Text style={styles.modalSub}>
+              Recopie le bloc « test du jeton sur Shopify » et envoie-le pour débloquer.
+            </Text>
+            {diagLoading ? (
+              <ActivityIndicator color={colors.primary} style={{ marginVertical: 30 }} />
+            ) : (
+              <ScrollView style={styles.diagScroll}>
+                <Text selectable style={styles.diagResult}>
+                  {diagText || "—"}
+                </Text>
+              </ScrollView>
+            )}
+            <TouchableOpacity style={styles.cancel} onPress={() => setDiagText(null)}>
               <Text style={styles.cancelText}>Fermer</Text>
             </TouchableOpacity>
           </View>
@@ -357,6 +407,10 @@ const styles = StyleSheet.create({
   },
   searchBtn: { backgroundColor: colors.primary, borderRadius: 10, paddingHorizontal: 18, justifyContent: "center" },
   searchBtnText: { color: "#fff", fontWeight: "700" },
+  diagBtn: { marginHorizontal: 12, marginBottom: 8, alignSelf: "flex-start" },
+  diagBtnText: { color: colors.muted, fontWeight: "700", fontSize: 13, textDecorationLine: "underline" },
+  diagScroll: { maxHeight: 320, marginTop: 14, backgroundColor: "#f1f5f2", borderRadius: 10, padding: 12 },
+  diagResult: { fontFamily: "monospace", fontSize: 13, color: colors.text, lineHeight: 20 },
   list: { padding: 12, paddingTop: 0 },
   empty: { textAlign: "center", color: colors.muted, marginTop: 40 },
   row: {
