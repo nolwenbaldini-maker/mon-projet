@@ -27,6 +27,8 @@ export interface Product {
   /** Toutes les photos du produit (rempli sur la fiche produit). */
   images: ProductImage[];
   priceRange: { minVariantPrice: Money };
+  /** Prix barré (avant promo), si une promotion est en cours. */
+  compareAtPrice: Money | null;
   variants: ProductVariant[];
 }
 

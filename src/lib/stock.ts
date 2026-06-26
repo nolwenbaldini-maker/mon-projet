@@ -1,4 +1,5 @@
 import { shopifyRequest } from "../shopify/client";
+import { discountPercent } from "../theme";
 import { CONDITIONS } from "./products";
 import { supabase } from "./supabase";
 
@@ -11,6 +12,8 @@ export interface AdminProduct {
   image: string | null;
   availableForSale: boolean;
   price: string | null; // prix affiché (depuis la Storefront)
+  compareAtPrice: string | null; // prix barré (avant promo) si promo en cours
+  promoPercent: number; // % de réduction (0 si pas de promo)
   condition: string | null; // état/grade (Neuf, Très bon, Bon, Correct…) si trouvé
   tags: string[]; // toutes les balises (pour différencier les produits identiques)
   productType: string | null;
@@ -55,6 +58,7 @@ export async function searchAdminProducts(query: string): Promise<AdminProduct[]
             options { name values }
             featuredImage { url(transform: { maxWidth: 200, maxHeight: 200 }) }
             priceRange { minVariantPrice { amount currencyCode } }
+            compareAtPriceRange { minVariantPrice { amount currencyCode } }
           }
         }
       }
@@ -65,6 +69,8 @@ export async function searchAdminProducts(query: string): Promise<AdminProduct[]
     const tags: string[] = e.node.tags ?? [];
     const options = e.node.options ?? [];
     const amount = e.node.priceRange?.minVariantPrice?.amount;
+    const compareAmount = e.node.compareAtPriceRange?.minVariantPrice?.amount;
+    const pct = discountPercent(amount, compareAmount);
     return {
       gid: e.node.id,
       id: Number(String(e.node.id).match(/(\d+)$/)?.[1] ?? 0),
@@ -72,6 +78,8 @@ export async function searchAdminProducts(query: string): Promise<AdminProduct[]
       image: e.node.featuredImage?.url ?? null,
       availableForSale: e.node.availableForSale,
       price: amount != null ? String(amount) : null,
+      compareAtPrice: pct > 0 ? String(compareAmount) : null,
+      promoPercent: pct,
       condition: pickCondition(options, tags),
       tags,
       productType: e.node.productType || null,
@@ -108,6 +116,17 @@ async function fnError(error: any): Promise<string> {
 export interface StockInfo {
   available: number | null;
   price: number | null;
+  compareAtPrice: number | null; // prix barré (promo en cours) si présent
+  promoPercent: number; // % de réduction actuel (0 si pas de promo)
+}
+
+/** Options de mise à jour stock/prix/promo. */
+export interface SaveOptions {
+  price?: number | null;
+  /** Applique une promo de ce % (prix barré = base, prix = base × (1 − %)). */
+  promoPercent?: number | null;
+  /** Retire la promo (restaure le prix barré comme prix, supprime la balise). */
+  removePromo?: boolean;
 }
 
 /** Diagnostic de configuration (domaine + présence du jeton, jamais sa valeur). */
@@ -144,32 +163,41 @@ export async function getStockInfo(productId: number): Promise<StockInfo> {
     body: { action: "get", productId },
   });
   if (error) throw new Error(await fnError(error));
+  const price = data?.price != null ? Number(data.price) : null;
+  const compareAt = data?.compareAtPrice != null ? Number(data.compareAtPrice) : null;
   return {
     available: typeof data?.available === "number" ? data.available : null,
-    price: data?.price != null ? Number(data.price) : null,
+    price,
+    compareAtPrice: compareAt,
+    promoPercent: discountPercent(price, compareAt),
   };
 }
 
 /**
- * Définit le stock et/ou le prix d'un produit.
+ * Définit le stock et/ou le prix d'un produit, et gère la promo.
  * available = 0 → rupture → disparaît du site.
- * price : nombre en euros (optionnel).
  */
 export async function saveStockPrice(
   productId: number,
   available: number,
-  price?: number | null
+  opts: SaveOptions = {}
 ): Promise<StockInfo> {
   const body: Record<string, any> = {
     action: "set",
     productId,
     available: Math.max(0, Math.floor(available)),
   };
-  if (price != null && !Number.isNaN(price)) body.price = price;
+  if (opts.price != null && !Number.isNaN(opts.price)) body.price = opts.price;
+  if (opts.promoPercent != null && opts.promoPercent > 0) body.promoPercent = opts.promoPercent;
+  if (opts.removePromo) body.removePromo = true;
   const { data, error } = await supabase.functions.invoke("manage-stock", { body });
   if (error) throw new Error(await fnError(error));
+  const price = data?.price != null ? Number(data.price) : opts.price ?? null;
+  const compareAt = data?.compareAtPrice != null ? Number(data.compareAtPrice) : null;
   return {
     available: typeof data?.available === "number" ? data.available : available,
-    price: data?.price != null ? Number(data.price) : price ?? null,
+    price,
+    compareAtPrice: compareAt,
+    promoPercent: discountPercent(price, compareAt),
   };
 }

@@ -16,6 +16,7 @@ import {
   saveStockPrice,
   searchAdminProducts,
   type AdminProduct,
+  type SaveOptions,
   type StockInfo,
 } from "../lib/stock";
 import { colors, formatMoney } from "../theme";
@@ -84,17 +85,24 @@ export function AdminStockScreen() {
     }
   }
 
-  async function save(stock: number, price: number | null) {
+  async function save(stock: number, opts: SaveOptions) {
     if (!editing) return;
     setSaving(true);
     try {
-      const res = await saveStockPrice(editing.id, stock, price);
+      const res = await saveStockPrice(editing.id, stock, opts);
       const newAvail = res.available ?? stock;
       const newPrice = res.price != null ? String(res.price) : editing.price;
+      const newCompare = res.compareAtPrice != null ? String(res.compareAtPrice) : null;
       setProducts((prev) =>
         prev.map((p) =>
           p.id === editing.id
-            ? { ...p, availableForSale: newAvail > 0, price: newPrice }
+            ? {
+                ...p,
+                availableForSale: newAvail > 0,
+                price: newPrice,
+                compareAtPrice: newCompare,
+                promoPercent: res.promoPercent,
+              }
             : p
         )
       );
@@ -149,7 +157,15 @@ export function AdminStockScreen() {
                 <View style={styles.rowBody}>
                   <Text style={styles.rowTitle} numberOfLines={2}>{item.title}</Text>
                   <View style={styles.metaRow}>
-                    <Text style={styles.price}>{priceLabel(item.price)}</Text>
+                    <Text style={[styles.price, item.promoPercent > 0 && styles.pricePromo]}>
+                      {priceLabel(item.price)}
+                    </Text>
+                    {item.promoPercent > 0 && item.compareAtPrice ? (
+                      <Text style={styles.strike}>{priceLabel(item.compareAtPrice)}</Text>
+                    ) : null}
+                    {item.promoPercent > 0 ? (
+                      <Text style={styles.promoBadge}>-{item.promoPercent}%</Text>
+                    ) : null}
                     {item.condition ? (
                       <Text style={styles.condition}>{item.condition}</Text>
                     ) : null}
@@ -188,6 +204,8 @@ export function AdminStockScreen() {
                 initialStock={info.available ?? 0}
                 stockKnown={info.available !== null}
                 initialPrice={info.price}
+                initialPromo={info.promoPercent}
+                compareAt={info.compareAtPrice}
                 saving={saving}
                 onSave={save}
               />
@@ -207,17 +225,23 @@ function StockEditor({
   initialStock,
   stockKnown,
   initialPrice,
+  initialPromo,
+  compareAt,
   saving,
   onSave,
 }: {
   initialStock: number;
   stockKnown: boolean;
   initialPrice: number | null;
+  initialPromo: number;
+  compareAt: number | null;
   saving: boolean;
-  onSave: (stock: number, price: number | null) => void;
+  onSave: (stock: number, opts: SaveOptions) => void;
 }) {
   const [val, setVal] = useState(initialStock);
   const [price, setPrice] = useState(initialPrice != null ? String(initialPrice) : "");
+  const [promo, setPromo] = useState(initialPromo > 0 ? String(initialPromo) : "");
+  const onPromo = initialPromo > 0;
 
   function parsedPrice(): number | null {
     const t = price.trim().replace(",", ".");
@@ -225,6 +249,17 @@ function StockEditor({
     const n = Number(t);
     return Number.isNaN(n) ? null : n;
   }
+  function parsedPromo(): number | null {
+    const t = promo.trim().replace(",", ".");
+    if (!t) return null;
+    const n = Number(t);
+    return Number.isNaN(n) ? null : Math.min(95, Math.max(0, n));
+  }
+
+  // Aperçu du prix promo (prix saisi × (1 − %)).
+  const base = parsedPrice() ?? initialPrice ?? 0;
+  const pct = parsedPromo() ?? 0;
+  const previewPromoPrice = pct > 0 ? Math.round(base * (1 - pct / 100) * 100) / 100 : null;
 
   return (
     <>
@@ -237,6 +272,37 @@ function StockEditor({
         value={price}
         onChangeText={(t) => setPrice(t.replace(/[^0-9.,]/g, ""))}
       />
+
+      {/* Promotion */}
+      <Text style={styles.fieldLabel}>Promotion (%)</Text>
+      {onPromo && (
+        <Text style={styles.promoCurrent}>
+          En promo : -{initialPromo}%{compareAt != null ? ` (prix barré ${formatMoney(String(compareAt), "EUR")})` : ""}
+        </Text>
+      )}
+      <View style={styles.promoRow}>
+        <TextInput
+          style={styles.promoInput}
+          keyboardType="number-pad"
+          placeholder="ex : 20"
+          placeholderTextColor={colors.muted}
+          value={promo}
+          onChangeText={(t) => setPromo(t.replace(/[^0-9]/g, ""))}
+        />
+        <Text style={styles.promoPct}>%</Text>
+        {previewPromoPrice != null && (
+          <Text style={styles.promoPreview}>→ {formatMoney(String(previewPromoPrice), "EUR")}</Text>
+        )}
+      </View>
+      {onPromo && (
+        <TouchableOpacity
+          style={styles.removePromoBtn}
+          onPress={() => onSave(val, { removePromo: true })}
+          disabled={saving}
+        >
+          <Text style={styles.removePromoText}>Retirer la promo</Text>
+        </TouchableOpacity>
+      )}
 
       <Text style={styles.fieldLabel}>Stock {stockKnown ? "" : "(non suivi pour l'instant)"}</Text>
       <View style={styles.stepper}>
@@ -260,7 +326,10 @@ function StockEditor({
 
       <TouchableOpacity
         style={styles.saveBtn}
-        onPress={() => onSave(val, parsedPrice())}
+        onPress={() => {
+          const p = parsedPromo();
+          onSave(val, { price: parsedPrice(), promoPercent: p && p > 0 ? p : null });
+        }}
         disabled={saving}
       >
         {saving ? (
@@ -305,8 +374,20 @@ const styles = StyleSheet.create({
   noThumb: { backgroundColor: colors.card },
   rowBody: { flex: 1 },
   rowTitle: { fontSize: 14, fontWeight: "600", color: colors.text },
-  metaRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 3 },
+  metaRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 3, flexWrap: "wrap" },
   price: { fontSize: 14, fontWeight: "800", color: colors.primary },
+  pricePromo: { color: "#dc2626" },
+  strike: { fontSize: 12, color: colors.muted, textDecorationLine: "line-through" },
+  promoBadge: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#fff",
+    backgroundColor: "#dc2626",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 7,
+    overflow: "hidden",
+  },
   condition: {
     fontSize: 11,
     fontWeight: "700",
@@ -348,6 +429,25 @@ const styles = StyleSheet.create({
     color: colors.text,
     backgroundColor: "#fff",
   },
+  promoCurrent: { color: "#dc2626", fontWeight: "700", fontSize: 13, marginBottom: 8 },
+  promoRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  promoInput: {
+    width: 90,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 18,
+    fontWeight: "800",
+    color: colors.text,
+    backgroundColor: "#fff",
+    textAlign: "center",
+  },
+  promoPct: { fontSize: 18, fontWeight: "800", color: colors.muted },
+  promoPreview: { fontSize: 15, fontWeight: "800", color: "#dc2626" },
+  removePromoBtn: { marginTop: 10, alignSelf: "flex-start", paddingVertical: 6 },
+  removePromoText: { color: colors.muted, fontWeight: "700", textDecorationLine: "underline" },
   stepper: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 16, marginTop: 4 },
   stepBtn: { width: 52, height: 52, borderRadius: 26, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
   stepText: { fontSize: 28, fontWeight: "800", color: colors.primary },

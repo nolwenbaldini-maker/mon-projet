@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { ProductCard } from "../components/ProductCard";
 import { isShopifyConfigured } from "../config/shopify";
-import { getProducts } from "../shopify/queries";
+import { getProducts, getPromoProducts } from "../shopify/queries";
 import type { Product } from "../shopify/types";
 import { colors } from "../theme";
 import { UNIVERSES } from "../universes";
@@ -19,6 +19,7 @@ import { UNIVERSES } from "../universes";
 export function HomeScreen() {
   const navigation = useNavigation<any>();
   const [newProducts, setNewProducts] = useState<Product[]>([]);
+  const [promos, setPromos] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -28,6 +29,10 @@ export function HomeScreen() {
     try {
       const prods = await getProducts();
       setNewProducts(prods.slice(0, 12));
+      // Promotions (non bloquant : si ça échoue, on n'affiche juste pas la section)
+      getPromoProducts()
+        .then((p) => setPromos(p.slice(0, 12)))
+        .catch(() => setPromos([]));
     } catch (e: any) {
       setError(e.message ?? "Impossible de charger la boutique");
     } finally {
@@ -84,6 +89,34 @@ export function HomeScreen() {
         </View>
         <Text style={styles.estimArrow}>›</Text>
       </TouchableOpacity>
+
+      {/* Promotions */}
+      {promos.length > 0 && (
+        <>
+          <View style={styles.promoHeader}>
+            <Text style={styles.sectionTitleInline}>🔥 Promotions</Text>
+            <View style={styles.promoTag}>
+              <Text style={styles.promoTagText}>Bons plans</Text>
+            </View>
+          </View>
+          <FlatList
+            horizontal
+            data={promos}
+            keyExtractor={(p) => p.id}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.hList}
+            initialNumToRender={4}
+            removeClippedSubviews
+            renderItem={({ item: p }) => (
+              <ProductCard
+                product={p}
+                width={150}
+                onPress={() => navigation.navigate("Product", { handle: p.handle, title: p.title })}
+              />
+            )}
+          />
+        </>
+      )}
 
       {/* Nos univers (accès rapide) */}
       <Text style={styles.sectionTitle}>Nos univers</Text>
@@ -174,6 +207,10 @@ const styles = StyleSheet.create({
   estimArrow: { fontSize: 26, color: colors.muted },
 
   sectionTitle: { fontSize: 17, fontWeight: "800", color: colors.text, paddingHorizontal: 16, marginTop: 8, marginBottom: 12 },
+  promoHeader: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, marginTop: 8, marginBottom: 12 },
+  sectionTitleInline: { fontSize: 17, fontWeight: "800", color: colors.text },
+  promoTag: { backgroundColor: "#dc2626", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
+  promoTagText: { color: "#fff", fontSize: 11, fontWeight: "800" },
   universes: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 10, gap: 0 },
   uniTile: {
     width: "20%",

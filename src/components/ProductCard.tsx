@@ -1,7 +1,7 @@
 import React from "react";
 import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import type { Product } from "../shopify/types";
-import { colors, formatMoney } from "../theme";
+import { colors, discountPercent, formatMoney } from "../theme";
 
 interface Props {
   product: Product;
@@ -13,6 +13,9 @@ interface Props {
 /** Vignette d'un produit dans la grille / liste / carrousel. */
 export function ProductCard({ product, onPress, width }: Props) {
   const price = product.priceRange.minVariantPrice;
+  const compareAt = product.compareAtPrice;
+  const pct = discountPercent(price.amount, compareAt?.amount);
+  const onPromo = pct > 0;
 
   return (
     <TouchableOpacity
@@ -20,20 +23,34 @@ export function ProductCard({ product, onPress, width }: Props) {
       onPress={onPress}
       activeOpacity={0.8}
     >
-      {product.featuredImage ? (
-        <Image source={{ uri: product.featuredImage.url }} style={styles.image} />
-      ) : (
-        <View style={[styles.image, styles.noImage]}>
-          <Text style={styles.noImageText}>Pas de photo</Text>
-        </View>
-      )}
+      <View>
+        {product.featuredImage ? (
+          <Image source={{ uri: product.featuredImage.url }} style={styles.image} />
+        ) : (
+          <View style={[styles.image, styles.noImage]}>
+            <Text style={styles.noImageText}>Pas de photo</Text>
+          </View>
+        )}
+        {onPromo && (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>-{pct}%</Text>
+          </View>
+        )}
+      </View>
       <View style={styles.info}>
         <Text style={styles.title} numberOfLines={2}>
           {product.title}
         </Text>
-        <Text style={styles.price}>
-          {formatMoney(price.amount, price.currencyCode)}
-        </Text>
+        <View style={styles.priceRow}>
+          <Text style={[styles.price, onPromo && styles.pricePromo]}>
+            {formatMoney(price.amount, price.currencyCode)}
+          </Text>
+          {onPromo && compareAt && (
+            <Text style={styles.strike}>
+              {formatMoney(compareAt.amount, compareAt.currencyCode)}
+            </Text>
+          )}
+        </View>
         {!product.availableForSale && (
           <Text style={styles.sold}>Épuisé</Text>
         )}
@@ -57,6 +74,19 @@ const styles = StyleSheet.create({
   noImageText: { color: colors.muted, fontSize: 12 },
   info: { padding: 10 },
   title: { fontSize: 14, fontWeight: "600", color: colors.text, minHeight: 36 },
-  price: { marginTop: 6, fontSize: 15, fontWeight: "700", color: colors.primary },
+  priceRow: { marginTop: 6, flexDirection: "row", alignItems: "center", gap: 7, flexWrap: "wrap" },
+  price: { fontSize: 15, fontWeight: "700", color: colors.primary },
+  pricePromo: { color: "#dc2626" },
+  strike: { fontSize: 13, color: colors.muted, textDecorationLine: "line-through" },
   sold: { marginTop: 4, fontSize: 12, color: colors.muted },
+  badge: {
+    position: "absolute",
+    top: 8,
+    left: 8,
+    backgroundColor: "#dc2626",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  badgeText: { color: "#fff", fontWeight: "800", fontSize: 12 },
 });

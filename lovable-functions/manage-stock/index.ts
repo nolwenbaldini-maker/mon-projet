@@ -8,12 +8,16 @@
 //                          les scopes write_inventory + read/write_products
 //
 // Contrat (corps JSON) :
-//   { action: "get", productId: number }
-//        -> { available: number, price: string }
-//   { action: "set", productId: number, available: number, price?: number }
-//        -> { available: number, price: string }
+//   { action: "get", productId }
+//        -> { available, price, compareAtPrice }
+//   { action: "set", productId, available, price?, promoPercent?, removePromo? }
+//        -> { available, price, compareAtPrice }
 //   (available = 0  => rupture => le produit disparaît du site)
-//   (price présent => met aussi à jour le prix de la variante principale)
+//   (price présent     => met à jour le prix de la variante principale)
+//   (promoPercent > 0  => applique une promo : prix barré = base, prix = base×(1−%),
+//                         + ajoute la balise "promo")
+//   (removePromo       => retire la promo : restaure le prix barré comme prix,
+//                         efface le prix barré, retire la balise "promo")
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -110,7 +114,7 @@ serve(async (req) => {
     // Sécurité : seul un administrateur connecté peut agir sur les stocks/prix.
     await assertAdmin(req);
 
-    const { action, productId, available, price } = await req.json();
+    const { action, productId, available, price, promoPercent, removePromo } = await req.json();
 
     // Diagnostic : ne révèle PAS le jeton. Liste les variables Shopify (noms)
     // et TESTE réellement le jeton contre /shop.json sur plusieurs versions
@@ -166,7 +170,11 @@ serve(async (req) => {
 
     if (action === "get") {
       const level = await readLevel();
-      return json({ available: level?.available ?? 0, price: variant.price });
+      return json({
+        available: level?.available ?? 0,
+        price: variant.price,
+        compareAtPrice: variant.compare_at_price ?? null,
+      });
     }
 
     if (action === "set") {
@@ -176,9 +184,49 @@ serve(async (req) => {
         inventory_management: "shopify",
         inventory_policy: "deny",
       };
+
+      const curPrice = Number(variant.price) || 0;
+      const curCompare = variant.compare_at_price ? Number(variant.compare_at_price) : 0;
       const hasPrice = price !== undefined && price !== null && !Number.isNaN(Number(price));
-      if (hasPrice) variantPatch.price = Number(price).toFixed(2);
+      const pct = promoPercent !== undefined && promoPercent !== null ? Number(promoPercent) : 0;
+
+      let finalPrice = hasPrice ? Number(price) : curPrice;
+      let finalCompare: number | null = curCompare > 0 ? curCompare : null;
+      let tagsOp: "add" | "remove" | null = null;
+
+      if (pct > 0) {
+        // Base de la promo : le prix barré existant s'il dépasse le prix,
+        // sinon le prix (explicite ou actuel). On applique -pct%.
+        const base = curCompare > curPrice ? curCompare : finalPrice;
+        finalCompare = base;
+        finalPrice = Math.round(base * (1 - pct / 100) * 100) / 100;
+        tagsOp = "add";
+      } else if (removePromo) {
+        // Retour au prix normal : on restaure le prix barré comme prix.
+        if (curCompare > 0) finalPrice = curCompare;
+        finalCompare = null;
+        tagsOp = "remove";
+      }
+
+      variantPatch.price = finalPrice.toFixed(2);
+      // null efface le prix barré ; sinon on le fixe.
+      variantPatch.compare_at_price = finalCompare != null ? finalCompare.toFixed(2) : null;
       await shopify(`/variants/${variant.id}.json`, "PUT", { variant: variantPatch });
+
+      // Balise « promo » au niveau produit (tags = chaîne séparée par des virgules).
+      if (tagsOp) {
+        const existing = String(prod.product.tags || "")
+          .split(",")
+          .map((t: string) => t.trim())
+          .filter(Boolean);
+        const hasPromo = existing.some((t: string) => t.toLowerCase() === "promo");
+        let nextTags = existing;
+        if (tagsOp === "add" && !hasPromo) nextTags = [...existing, "promo"];
+        if (tagsOp === "remove") nextTags = existing.filter((t: string) => t.toLowerCase() !== "promo");
+        await shopify(`/products/${productId}.json`, "PUT", {
+          product: { id: Number(productId), tags: nextTags.join(", ") },
+        });
+      }
 
       // Emplacement : celui du niveau existant. Sinon, on tente la liste des
       // emplacements (nécessite read_locations) en dernier recours seulement.
@@ -208,7 +256,11 @@ serve(async (req) => {
         inventory_item_id: invItem,
         available: newAvail,
       });
-      return json({ available: newAvail, price: hasPrice ? Number(price).toFixed(2) : variant.price });
+      return json({
+        available: newAvail,
+        price: finalPrice.toFixed(2),
+        compareAtPrice: finalCompare != null ? finalCompare.toFixed(2) : null,
+      });
     }
 
     return json({ error: "action inconnue" }, 400);

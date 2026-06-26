@@ -28,3 +28,14 @@ export function formatMoney(amount: string, currencyCode: string): string {
     return `${value.toFixed(2)} ${currencyCode}`;
   }
 }
+
+/**
+ * Pourcentage de réduction d'une promo (prix barré vs prix actuel).
+ * Renvoie 0 s'il n'y a pas de promo réelle (prix barré absent ou ≤ prix).
+ */
+export function discountPercent(price?: string | number | null, compareAt?: string | number | null): number {
+  const p = Number(price);
+  const c = Number(compareAt);
+  if (!isFinite(p) || !isFinite(c) || c <= p || p <= 0) return 0;
+  return Math.round(((c - p) / c) * 100);
+}

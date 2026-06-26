@@ -16,7 +16,7 @@ import { useCart } from "../context/CartContext";
 import type { ProductProps } from "../navigation";
 import { getProductByHandle } from "../shopify/queries";
 import type { Product, ProductImage, ProductVariant } from "../shopify/types";
-import { colors, formatMoney } from "../theme";
+import { colors, discountPercent, formatMoney } from "../theme";
 
 export function ProductScreen({ route, navigation }: ProductProps) {
   const { handle } = route.params;
@@ -62,6 +62,8 @@ export function ProductScreen({ route, navigation }: ProductProps) {
 
   const price = variant?.price ?? product.priceRange.minVariantPrice;
   const canBuy = variant?.availableForSale ?? false;
+  const compareAt = product.compareAtPrice;
+  const promoPct = discountPercent(price.amount, compareAt?.amount);
 
   return (
     <View style={styles.container}>
@@ -77,9 +79,19 @@ export function ProductScreen({ route, navigation }: ProductProps) {
         />
         <View style={styles.body}>
           <Text style={styles.title}>{product.title}</Text>
-          <Text style={styles.price}>
-            {formatMoney(price.amount, price.currencyCode)}
-          </Text>
+          <View style={styles.priceRow}>
+            <Text style={[styles.price, promoPct > 0 && styles.pricePromo]}>
+              {formatMoney(price.amount, price.currencyCode)}
+            </Text>
+            {promoPct > 0 && compareAt && (
+              <>
+                <Text style={styles.strike}>
+                  {formatMoney(compareAt.amount, compareAt.currencyCode)}
+                </Text>
+                <Text style={styles.promoBadge}>-{promoPct}%</Text>
+              </>
+            )}
+          </View>
 
           {/* Choix de la variante si le produit en a plusieurs */}
           {product.variants.length > 1 && (
@@ -206,7 +218,20 @@ const styles = StyleSheet.create({
   dotActive: { backgroundColor: colors.primary, width: 18 },
   body: { padding: 16 },
   title: { fontSize: 20, fontWeight: "700", color: colors.text },
-  price: { fontSize: 22, fontWeight: "800", color: colors.primary, marginTop: 8 },
+  priceRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 8, flexWrap: "wrap" },
+  price: { fontSize: 22, fontWeight: "800", color: colors.primary },
+  pricePromo: { color: "#dc2626" },
+  strike: { fontSize: 16, color: colors.muted, textDecorationLine: "line-through" },
+  promoBadge: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#fff",
+    backgroundColor: "#dc2626",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    overflow: "hidden",
+  },
   variants: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 16 },
   variant: {
     paddingHorizontal: 14,

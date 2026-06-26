@@ -11,6 +11,7 @@ const PRODUCT_FRAGMENT = /* GraphQL */ `
     availableForSale
     featuredImage { url(transform: { maxWidth: 400, maxHeight: 400 }) altText }
     priceRange { minVariantPrice { amount currencyCode } }
+    compareAtPriceRange { minVariantPrice { amount currencyCode } }
     variants(first: 10) {
       edges {
         node {
@@ -26,11 +27,38 @@ const PRODUCT_FRAGMENT = /* GraphQL */ `
 
 /** Transforme la structure edges/node de Shopify en simple tableau. */
 function flattenProduct(node: any): Product {
+  const compareAt = node.compareAtPriceRange?.minVariantPrice ?? null;
   return {
     ...node,
+    compareAtPrice: compareAt && Number(compareAt.amount) > 0 ? compareAt : null,
     variants: node.variants.edges.map((e: any) => e.node),
     images: node.images ? node.images.edges.map((e: any) => e.node) : [],
   };
+}
+
+/**
+ * Produits en promotion : balise « promo » + prix barré supérieur au prix.
+ * Lecture publique (ne dépend pas du jeton Admin).
+ */
+export async function getPromoProducts(): Promise<Product[]> {
+  const query = /* GraphQL */ `
+    ${PRODUCT_FRAGMENT}
+    query PromoProducts {
+      products(first: 50, query: "tag:promo", sortKey: CREATED_AT, reverse: true) {
+        edges { node { ...ProductFields } }
+      }
+    }
+  `;
+  const data = await shopifyRequest<any>(query);
+  return data.products.edges
+    .map((e: any) => flattenProduct(e.node))
+    .filter((p: Product) => p.availableForSale) // pas de produits en rupture
+    .filter((p: Product) => {
+      // promo réelle uniquement : prix barré > prix actuel
+      const price = Number(p.priceRange.minVariantPrice.amount);
+      const compare = p.compareAtPrice ? Number(p.compareAtPrice.amount) : 0;
+      return compare > price;
+    });
 }
 
 /** Récupère les rayons (collections) de la boutique. */
