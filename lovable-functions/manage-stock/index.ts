@@ -63,9 +63,14 @@ async function assertAdmin(req: Request): Promise<string> {
  * sur un éventuel jeton fixe.
  */
 function resolveToken(uid: string): string {
+  // 1) Jeton DÉDIÉ permanent si tu en crées un (recommandé, n'expire jamais) :
+  //    secret Lovable « SHOPIFY_MANAGE_STOCK_TOKEN » = jeton Admin custom app (shpat_…).
+  const dedicated = (Deno.env.get("SHOPIFY_MANAGE_STOCK_TOKEN") || "").trim();
+  if (dedicated) return dedicated;
+  // 2) Jeton « online » de l'utilisateur connecté (se rafraîchit à la reconnexion).
   const online = (Deno.env.get(`SHOPIFY_ONLINE_ACCESS_TOKEN:user:${uid}`) || "").trim();
   if (online) return online;
-  // Repli : n'importe quel jeton online présent, puis le jeton fixe.
+  // 3) Repli : n'importe quel jeton online présent, puis le jeton fixe.
   try {
     const env = Deno.env.toObject();
     const anyOnline = Object.entries(env)
