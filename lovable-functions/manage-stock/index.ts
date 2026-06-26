@@ -26,7 +26,7 @@ import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 // pour éviter que la fonction ne casse au chargement si l'import échoue.
 // La protection « contrôle admin » de Lovable reste active : ceci est une
 // sécurité supplémentaire.
-async function assertAdmin(req: Request): Promise<void> {
+async function assertAdmin(req: Request): Promise<string> {
   const authHeader = req.headers.get("Authorization") ?? "";
   const url = (Deno.env.get("SUPABASE_URL") ?? "").replace(/\/$/, "");
   const anon = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
@@ -53,6 +53,30 @@ async function assertAdmin(req: Request): Promise<void> {
     Array.isArray(roles) &&
     roles.some((r: any) => String(r.role).toLowerCase() === "admin");
   if (!isAdmin) throw new Error("AUTH: accès réservé aux administrateurs.");
+  return uid;
+}
+
+/**
+ * Jeton Shopify à utiliser pour cet appel. La boutique utilise une appli OAuth
+ * avec des jetons « online » par utilisateur (SHOPIFY_ONLINE_ACCESS_TOKEN:user:<uid>).
+ * On prend donc en priorité celui de l'utilisateur connecté, sinon on retombe
+ * sur un éventuel jeton fixe.
+ */
+function resolveToken(uid: string): string {
+  const online = (Deno.env.get(`SHOPIFY_ONLINE_ACCESS_TOKEN:user:${uid}`) || "").trim();
+  if (online) return online;
+  // Repli : n'importe quel jeton online présent, puis le jeton fixe.
+  try {
+    const env = Deno.env.toObject();
+    const anyOnline = Object.entries(env)
+      .filter(([n]) => n.startsWith("SHOPIFY_ONLINE_ACCESS_TOKEN:user:"))
+      .map(([, v]) => (v || "").trim())
+      .find(Boolean);
+    if (anyOnline) return anyOnline;
+  } catch (_) {
+    // ignore
+  }
+  return pickToken();
 }
 
 // Domaine de la boutique (public, pas un secret). On lit d'abord les variables
@@ -101,10 +125,10 @@ const cors = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-async function shopify(path: string, method = "GET", body?: unknown) {
+async function shopify(token: string, path: string, method = "GET", body?: unknown) {
   const res = await fetch(`${API}${path}`, {
     method,
-    headers: { "X-Shopify-Access-Token": TOKEN, "Content-Type": "application/json" },
+    headers: { "X-Shopify-Access-Token": token, "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await res.json().catch(() => ({}));
@@ -130,31 +154,46 @@ serve(async (req) => {
   if (action === "diag") {
     const vars: Record<string, number> = {};
     let shpatCount = 0;
+    // Liste des jetons à tester : { étiquette courte -> valeur }.
+    const candidates: { label: string; value: string }[] = [];
     try {
       const env = Deno.env.toObject();
       for (const [name, value] of Object.entries(env)) {
         const v = (value || "").trim();
         if (/shopify|shop|token/i.test(name)) vars[name] = v.length;
         if (v.startsWith("shpat_")) shpatCount++;
+        // Tout ce qui ressemble à un jeton d'accès Shopify.
+        if (v && /access_token/i.test(name)) {
+          let label = name.replace("SHOPIFY_", "");
+          // Jetons "online" : on raccourcit l'uid (online:ABC…XYZ).
+          const m = name.match(/SHOPIFY_ONLINE_ACCESS_TOKEN:user:(.+)$/);
+          if (m) {
+            const id = m[1];
+            label = `online:${id.slice(0, 4)}…${id.slice(-3)}`;
+          }
+          candidates.push({ label, value: v });
+        }
       }
     } catch (_) {
-      // toObject indisponible : on ignore, le test du jeton reste informatif.
+      // toObject indisponible : on teste au moins le jeton résolu par défaut.
     }
-    const versions = ["2025-04", "2025-07", "2025-10", "2026-01", "2024-10"];
+    if (candidates.length === 0) candidates.push({ label: "TOKEN", value: TOKEN });
+
+    // On teste CHAQUE jeton contre /shop.json pour voir lequel est valide.
     const shopTests: Record<string, string> = {};
-    for (const ver of versions) {
+    for (const c of candidates) {
       try {
-        const r = await fetch(`https://${DOMAIN}/admin/api/${ver}/shop.json`, {
-          headers: { "X-Shopify-Access-Token": TOKEN },
+        const r = await fetch(`https://${DOMAIN}/admin/api/2024-10/shop.json`, {
+          headers: { "X-Shopify-Access-Token": c.value },
         });
         let shopName = "";
         if (r.ok) {
           const b = await r.json().catch(() => ({}));
           shopName = b?.shop?.myshopify_domain || b?.shop?.name || "ok";
         }
-        shopTests[ver] = r.ok ? `200 (${shopName})` : String(r.status);
+        shopTests[c.label] = r.ok ? `200 ✅ (${shopName})` : String(r.status);
       } catch (err) {
-        shopTests[ver] = "ERR " + String((err as Error)?.message ?? err).slice(0, 40);
+        shopTests[c.label] = "ERR " + String((err as Error)?.message ?? err).slice(0, 40);
       }
     }
     return json({
@@ -168,18 +207,21 @@ serve(async (req) => {
   }
 
   try {
-    // Sécurité : seul un administrateur connecté peut agir sur les stocks/prix.
-    await assertAdmin(req);
+    // Sécurité : seul un administrateur connecté peut agir. On récupère son uid
+    // pour utiliser SON jeton Shopify « online ».
+    const uid = await assertAdmin(req);
+    const token = resolveToken(uid);
+    const sh = (path: string, method = "GET", b?: unknown) => shopify(token, path, method, b);
 
     // Variante principale + article d'inventaire
-    const prod = await shopify(`/products/${productId}.json`);
+    const prod = await sh(`/products/${productId}.json`);
     const variant = prod.product.variants[0];
     const invItem = variant.inventory_item_id;
 
     // Niveau d'inventaire existant → on en déduit l'emplacement SANS lister les
     // emplacements (évite le scope read_locations, non accordé sur l'app).
     async function readLevel() {
-      const lvl = await shopify(`/inventory_levels.json?inventory_item_ids=${invItem}`);
+      const lvl = await sh(`/inventory_levels.json?inventory_item_ids=${invItem}`);
       return lvl.inventory_levels?.[0] ?? null;
     }
 
@@ -226,7 +268,7 @@ serve(async (req) => {
       variantPatch.price = finalPrice.toFixed(2);
       // null efface le prix barré ; sinon on le fixe.
       variantPatch.compare_at_price = finalCompare != null ? finalCompare.toFixed(2) : null;
-      await shopify(`/variants/${variant.id}.json`, "PUT", { variant: variantPatch });
+      await sh(`/variants/${variant.id}.json`, "PUT", { variant: variantPatch });
 
       // Balise « promo » au niveau produit (tags = chaîne séparée par des virgules).
       if (tagsOp) {
@@ -238,7 +280,7 @@ serve(async (req) => {
         let nextTags = existing;
         if (tagsOp === "add" && !hasPromo) nextTags = [...existing, "promo"];
         if (tagsOp === "remove") nextTags = existing.filter((t: string) => t.toLowerCase() !== "promo");
-        await shopify(`/products/${productId}.json`, "PUT", {
+        await sh(`/products/${productId}.json`, "PUT", {
           product: { id: Number(productId), tags: nextTags.join(", ") },
         });
       }
@@ -249,11 +291,11 @@ serve(async (req) => {
       let locationId = level?.location_id;
       if (!locationId) {
         try {
-          const { locations } = await shopify(`/locations.json`);
+          const { locations } = await sh(`/locations.json`);
           const loc = locations.find((l: any) => l.active) ?? locations[0];
           locationId = loc?.id;
           if (locationId) {
-            await shopify(`/inventory_levels/connect.json`, "POST", {
+            await sh(`/inventory_levels/connect.json`, "POST", {
               location_id: locationId,
               inventory_item_id: invItem,
             }).catch(() => {});
@@ -266,7 +308,7 @@ serve(async (req) => {
       }
 
       const newAvail = Math.max(0, Number(available) || 0);
-      await shopify(`/inventory_levels/set.json`, "POST", {
+      await sh(`/inventory_levels/set.json`, "POST", {
         location_id: locationId,
         inventory_item_id: invItem,
         available: newAvail,
