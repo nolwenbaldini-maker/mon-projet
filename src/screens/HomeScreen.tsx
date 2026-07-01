@@ -1,5 +1,5 @@
-import { useNavigation } from "@react-navigation/native";
-import React, { useEffect, useRef, useState } from "react";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -13,7 +13,7 @@ import { ProductCard } from "../components/ProductCard";
 import { isShopifyConfigured } from "../config/shopify";
 import { getProducts, getPromoProducts } from "../shopify/queries";
 import type { Product } from "../shopify/types";
-import { colors } from "../theme";
+import { colors, discountPercent } from "../theme";
 import { UNIVERSES } from "../universes";
 
 export function HomeScreen() {
@@ -29,8 +29,8 @@ export function HomeScreen() {
   const scrollToPromos = () =>
     scrollRef.current?.scrollTo({ y: Math.max(0, promoY.current - 8), animated: true });
 
-  async function load() {
-    setLoading(true);
+  async function load(silent = false) {
+    if (!silent) setLoading(true);
     setError(null);
     try {
       const prods = await getProducts();
@@ -42,9 +42,11 @@ export function HomeScreen() {
     } catch (e: any) {
       setError(e.message ?? "Impossible de charger la boutique");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }
+
+  const didInitialLoad = useRef(false);
 
   useEffect(() => {
     if (!isShopifyConfigured()) {
@@ -53,7 +55,16 @@ export function HomeScreen() {
       return;
     }
     load();
+    didInitialLoad.current = true;
   }, []);
+
+  // À chaque retour sur l'accueil : rafraîchit en silence pour refléter les
+  // promotions qu'on vient d'appliquer côté admin (sans faire clignoter l'écran).
+  useFocusEffect(
+    useCallback(() => {
+      if (didInitialLoad.current && isShopifyConfigured()) load(true);
+    }, [])
+  );
 
   if (error === "config") {
     return (
@@ -66,6 +77,12 @@ export function HomeScreen() {
     );
   }
 
+  // Meilleure réduction parmi les promos en cours (pour la bannière).
+  const maxPct = promos.reduce((m, p) => {
+    const pct = discountPercent(p.priceRange.minVariantPrice.amount, p.compareAtPrice?.amount);
+    return pct > m ? pct : m;
+  }, 0);
+
   return (
     <ScrollView ref={scrollRef} style={styles.container} showsVerticalScrollIndicator={false}>
       <View style={styles.promo}>
@@ -75,12 +92,16 @@ export function HomeScreen() {
       {/* Bannière PROMOTIONS (visible uniquement s'il y a des promos en cours) */}
       {promos.length > 0 && (
         <TouchableOpacity style={styles.promoBanner} activeOpacity={0.9} onPress={scrollToPromos}>
-          <Text style={styles.promoBannerEmoji}>🔥</Text>
+          {maxPct > 0 && (
+            <View style={styles.promoBannerPct}>
+              <Text style={styles.promoBannerPctText}>-{maxPct}%</Text>
+            </View>
+          )}
           <View style={{ flex: 1 }}>
-            <Text style={styles.promoBannerTitle}>PROMOTIONS EN COURS</Text>
+            <Text style={styles.promoBannerTitle}>🔥 PROMOTIONS EN COURS</Text>
             <Text style={styles.promoBannerSub}>
-              {promos.length} bon{promos.length > 1 ? "s" : ""} plan{promos.length > 1 ? "s" : ""} à
-              saisir — prix réduits !
+              {promos.length} bon{promos.length > 1 ? "s" : ""} plan{promos.length > 1 ? "s" : ""}
+              {maxPct > 0 ? ` — jusqu'à -${maxPct}%` : " — prix réduits"} !
             </Text>
           </View>
           <Text style={styles.promoBannerCta}>Voir ›</Text>
@@ -163,7 +184,7 @@ export function HomeScreen() {
       ) : error ? (
         <View style={styles.center}>
           <Text style={styles.error}>{error}</Text>
-          <TouchableOpacity onPress={load} style={styles.retry}>
+          <TouchableOpacity onPress={() => load()} style={styles.retry}>
             <Text style={styles.retryText}>Réessayer</Text>
           </TouchableOpacity>
         </View>
@@ -205,11 +226,24 @@ const styles = StyleSheet.create({
     backgroundColor: "#dc2626",
     marginHorizontal: 12,
     marginTop: 12,
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 14,
-    borderRadius: 14,
+    borderRadius: 16,
+    shadowColor: "#dc2626",
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 5,
   },
-  promoBannerEmoji: { fontSize: 28 },
+  promoBannerPct: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    minWidth: 60,
+    alignItems: "center",
+  },
+  promoBannerPctText: { color: "#dc2626", fontSize: 18, fontWeight: "900" },
   promoBannerTitle: { color: "#fff", fontSize: 15, fontWeight: "900", letterSpacing: 0.5 },
   promoBannerSub: { color: "#ffe4e4", fontSize: 12, marginTop: 2, fontWeight: "600" },
   promoBannerCta: { color: "#fff", fontSize: 14, fontWeight: "800" },

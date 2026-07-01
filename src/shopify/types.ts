@@ -15,6 +15,7 @@ export interface ProductVariant {
   title: string;
   availableForSale: boolean;
   price: Money;
+  compareAtPrice: Money | null;
 }
 
 export interface Product {

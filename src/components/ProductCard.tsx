@@ -34,6 +34,7 @@ export function ProductCard({ product, onPress, width }: Props) {
         {onPromo && (
           <View style={styles.badge}>
             <Text style={styles.badgeText}>-{pct}%</Text>
+            <Text style={styles.badgeSub}>PROMO</Text>
           </View>
         )}
       </View>
@@ -75,18 +76,25 @@ const styles = StyleSheet.create({
   info: { padding: 10 },
   title: { fontSize: 14, fontWeight: "600", color: colors.text, minHeight: 36 },
   priceRow: { marginTop: 6, flexDirection: "row", alignItems: "center", gap: 7, flexWrap: "wrap" },
-  price: { fontSize: 15, fontWeight: "700", color: colors.primary },
+  price: { fontSize: 15, fontWeight: "800", color: colors.primary },
   pricePromo: { color: "#dc2626" },
-  strike: { fontSize: 13, color: colors.muted, textDecorationLine: "line-through" },
+  strike: { fontSize: 13, color: colors.muted, textDecorationLine: "line-through", fontWeight: "600" },
   sold: { marginTop: 4, fontSize: 12, color: colors.muted },
   badge: {
     position: "absolute",
     top: 8,
-    left: 8,
+    right: 8,
     backgroundColor: "#dc2626",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 10,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
   },
-  badgeText: { color: "#fff", fontWeight: "800", fontSize: 12 },
+  badgeText: { color: "#fff", fontWeight: "900", fontSize: 15, lineHeight: 17 },
+  badgeSub: { color: "#fff", fontWeight: "800", fontSize: 8, letterSpacing: 1 },
 });

@@ -62,8 +62,11 @@ export function ProductScreen({ route, navigation }: ProductProps) {
 
   const price = variant?.price ?? product.priceRange.minVariantPrice;
   const canBuy = variant?.availableForSale ?? false;
-  const compareAt = product.compareAtPrice;
+  // Prix barré : celui de la variante sélectionnée en priorité, sinon celui du produit.
+  const compareAt = variant?.compareAtPrice ?? product.compareAtPrice;
   const promoPct = discountPercent(price.amount, compareAt?.amount);
+  const savings =
+    promoPct > 0 && compareAt ? Number(compareAt.amount) - Number(price.amount) : 0;
 
   return (
     <View style={styles.container}>
@@ -78,9 +81,17 @@ export function ProductScreen({ route, navigation }: ProductProps) {
           }
         />
         <View style={styles.body}>
-          {promoPct > 0 && (
+          {promoPct > 0 && compareAt && (
             <View style={styles.promoBanner}>
-              <Text style={styles.promoBannerText}>🔥 En promotion — -{promoPct}%</Text>
+              <View style={styles.promoPctBox}>
+                <Text style={styles.promoPctBig}>-{promoPct}%</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.promoBannerTitle}>🔥 PROMOTION</Text>
+                <Text style={styles.promoBannerSub}>
+                  Économise {formatMoney(String(savings), price.currencyCode)} sur ce produit
+                </Text>
+              </View>
             </View>
           )}
           <Text style={styles.title}>{product.title}</Text>
@@ -89,12 +100,9 @@ export function ProductScreen({ route, navigation }: ProductProps) {
               {formatMoney(price.amount, price.currencyCode)}
             </Text>
             {promoPct > 0 && compareAt && (
-              <>
-                <Text style={styles.strike}>
-                  {formatMoney(compareAt.amount, compareAt.currencyCode)}
-                </Text>
-                <Text style={styles.promoBadge}>-{promoPct}%</Text>
-              </>
+              <Text style={styles.strike}>
+                {formatMoney(compareAt.amount, compareAt.currencyCode)}
+              </Text>
             )}
           </View>
 
@@ -223,29 +231,30 @@ const styles = StyleSheet.create({
   dotActive: { backgroundColor: colors.primary, width: 18 },
   body: { padding: 16 },
   promoBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
     backgroundColor: "#dc2626",
-    borderRadius: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    alignSelf: "flex-start",
-    marginBottom: 10,
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 14,
   },
-  promoBannerText: { color: "#fff", fontWeight: "800", fontSize: 13 },
+  promoPctBox: {
+    backgroundColor: "#fff",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    minWidth: 66,
+    alignItems: "center",
+  },
+  promoPctBig: { color: "#dc2626", fontSize: 22, fontWeight: "900" },
+  promoBannerTitle: { color: "#fff", fontSize: 15, fontWeight: "900", letterSpacing: 0.5 },
+  promoBannerSub: { color: "#ffe4e4", fontSize: 13, fontWeight: "600", marginTop: 2 },
   title: { fontSize: 20, fontWeight: "700", color: colors.text },
   priceRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 8, flexWrap: "wrap" },
-  price: { fontSize: 22, fontWeight: "800", color: colors.primary },
+  price: { fontSize: 24, fontWeight: "900", color: colors.primary },
   pricePromo: { color: "#dc2626" },
-  strike: { fontSize: 16, color: colors.muted, textDecorationLine: "line-through" },
-  promoBadge: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: "#fff",
-    backgroundColor: "#dc2626",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    overflow: "hidden",
-  },
+  strike: { fontSize: 17, color: colors.muted, textDecorationLine: "line-through", fontWeight: "600" },
   variants: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 16 },
   variant: {
     paddingHorizontal: 14,
