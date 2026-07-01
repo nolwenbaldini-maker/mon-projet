@@ -141,6 +141,62 @@ async function shopify(token: string, path: string, method = "GET", body?: unkno
   return data;
 }
 
+// ---- Promotions programmées (fusionné ici pour utiliser le jeton qui marche) ----
+const SB_URL2 = (Deno.env.get("SUPABASE_URL") ?? "").replace(/\/$/, "");
+const SERVICE2 =
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+
+async function sbRest(path: string, method = "GET", body?: unknown) {
+  const res = await fetch(`${SB_URL2}/rest/v1/${path}`, {
+    method,
+    headers: {
+      apikey: SERVICE2,
+      Authorization: `Bearer ${SERVICE2}`,
+      "Content-Type": "application/json",
+      Prefer: "return=representation",
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json().catch(() => []);
+  if (!res.ok) throw new Error(JSON.stringify(data));
+  return data;
+}
+
+async function applyScheduledPromo(token: string, productId: number, percent: number) {
+  const prod = await shopify(token, `/products/${productId}.json`);
+  const v = prod.product.variants[0];
+  const curPrice = Number(v.price) || 0;
+  const curCompare = v.compare_at_price ? Number(v.compare_at_price) : 0;
+  const base = curCompare > curPrice ? curCompare : curPrice;
+  const newPrice = Math.round(base * (1 - percent / 100) * 100) / 100;
+  await shopify(token, `/variants/${v.id}.json`, "PUT", {
+    variant: { id: v.id, price: newPrice.toFixed(2), compare_at_price: base.toFixed(2) },
+  });
+  await setScheduledPromoTag(token, prod, productId, true);
+}
+async function removeScheduledPromo(token: string, productId: number) {
+  const prod = await shopify(token, `/products/${productId}.json`);
+  const v = prod.product.variants[0];
+  const curCompare = v.compare_at_price ? Number(v.compare_at_price) : 0;
+  const patch: Record<string, unknown> = { id: v.id, compare_at_price: null };
+  if (curCompare > 0) patch.price = curCompare.toFixed(2);
+  await shopify(token, `/variants/${v.id}.json`, "PUT", { variant: patch });
+  await setScheduledPromoTag(token, prod, productId, false);
+}
+async function setScheduledPromoTag(token: string, prod: any, productId: number, on: boolean) {
+  const existing = String(prod.product.tags || "")
+    .split(",")
+    .map((t: string) => t.trim())
+    .filter(Boolean);
+  const has = existing.some((t: string) => t.toLowerCase() === "promo");
+  let next = existing;
+  if (on && !has) next = [...existing, "promo"];
+  if (!on) next = existing.filter((t: string) => t.toLowerCase() !== "promo");
+  await shopify(token, `/products/${productId}.json`, "PUT", {
+    product: { id: productId, tags: next.join(", ") },
+  });
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   const json = (body: unknown, status = 200) =>
@@ -216,10 +272,95 @@ serve(async (req) => {
     });
   }
 
+  // PROMOS PROGRAMMÉES — CRON : applique/retire les promos dues (protégé par CRON_SECRET).
+  if (action === "tick") {
+    const secret = req.headers.get("x-cron-secret") ?? "";
+    const expected = Deno.env.get("CRON_SECRET") ?? "";
+    if (!expected || secret !== expected) return json({ error: "forbidden" }, 403);
+    try {
+      const now = new Date().toISOString();
+      const rows: any[] = await sbRest(
+        `scheduled_promos?status=in.(scheduled,active,error)&select=*`
+      );
+      let started = 0, ended = 0, failed = 0;
+      for (const r of rows) {
+        try {
+          const notEnded = r.ends_at > now;
+          const begun = r.starts_at <= now;
+          if ((r.status === "scheduled" || r.status === "error") && begun && notEnded) {
+            await applyScheduledPromo(TOKEN, Number(r.product_id), Number(r.percent));
+            await sbRest(`scheduled_promos?id=eq.${r.id}`, "PATCH", { status: "active", last_error: null });
+            started++;
+          } else if (!notEnded) {
+            if (r.status === "active") await removeScheduledPromo(TOKEN, Number(r.product_id));
+            await sbRest(`scheduled_promos?id=eq.${r.id}`, "PATCH", { status: "done", last_error: null });
+            ended++;
+          }
+        } catch (e) {
+          failed++;
+          await sbRest(`scheduled_promos?id=eq.${r.id}`, "PATCH", {
+            status: "error",
+            last_error: String((e as Error)?.message ?? e).slice(0, 300),
+          }).catch(() => {});
+        }
+      }
+      return json({ ok: true, started, ended, failed, checked: rows.length });
+    } catch (e) {
+      return json({ error: String((e as Error)?.message ?? e) }, 500);
+    }
+  }
+
   try {
     // Sécurité : seul un administrateur connecté peut agir. On récupère son uid
     // pour utiliser SON jeton Shopify « online ».
     const uid = await assertAdmin(req);
+
+    // PROMOS PROGRAMMÉES — actions admin (créer / lister / annuler).
+    if (action === "schedule-promo") {
+      const { productTitle, percent, startsAt, endsAt } = body as any;
+      if (!productId || !percent || !startsAt || !endsAt)
+        return json({ error: "Champs requis manquants." }, 400);
+      const inserted = await sbRest(`scheduled_promos`, "POST", {
+        product_id: Number(productId),
+        product_title: productTitle ?? null,
+        percent: Math.round(Number(percent)),
+        starts_at: startsAt,
+        ends_at: endsAt,
+        status: "scheduled",
+        created_by: uid,
+      });
+      const now = new Date().toISOString();
+      const row = Array.isArray(inserted) ? inserted[0] : inserted;
+      if (row && startsAt <= now && endsAt > now) {
+        try {
+          await applyScheduledPromo(TOKEN, Number(productId), Math.round(Number(percent)));
+          await sbRest(`scheduled_promos?id=eq.${row.id}`, "PATCH", { status: "active" });
+        } catch (e) {
+          await sbRest(`scheduled_promos?id=eq.${row.id}`, "PATCH", {
+            status: "error",
+            last_error: String((e as Error)?.message ?? e).slice(0, 300),
+          }).catch(() => {});
+        }
+      }
+      return json({ ok: true });
+    }
+    if (action === "list-scheduled") {
+      const filter = productId ? `&product_id=eq.${Number(productId)}` : "";
+      const promos = await sbRest(`scheduled_promos?select=*${filter}&order=starts_at.desc&limit=50`);
+      return json({ promos });
+    }
+    if (action === "cancel-scheduled") {
+      const { id } = body as any;
+      if (!id) return json({ error: "id manquant" }, 400);
+      const rows: any[] = await sbRest(`scheduled_promos?id=eq.${id}&select=*`);
+      const row = rows[0];
+      if (row && row.status === "active") {
+        try { await removeScheduledPromo(TOKEN, Number(row.product_id)); } catch (_) { /* annule quand même */ }
+      }
+      await sbRest(`scheduled_promos?id=eq.${id}`, "PATCH", { status: "cancelled" });
+      return json({ ok: true });
+    }
+
     const token = resolveToken(uid);
     const sh = (path: string, method = "GET", b?: unknown) => shopify(token, path, method, b);
 

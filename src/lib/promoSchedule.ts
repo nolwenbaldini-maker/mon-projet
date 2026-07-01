@@ -22,7 +22,7 @@ async function fnError(error: any): Promise<string> {
     }
   } catch {}
   if (ctx?.status === 404)
-    return "404 — fonction « promo-scheduler » introuvable (pas déployée côté Lovable ?).";
+    return "404 — fonction « manage-stock » introuvable (pas déployée côté Lovable ?).";
   return error?.message || "Erreur de programmation.";
 }
 
@@ -37,9 +37,9 @@ export async function schedulePromo(
   startsAt: Date,
   endsAt: Date
 ): Promise<void> {
-  const { error } = await supabase.functions.invoke("promo-scheduler", {
+  const { error } = await supabase.functions.invoke("manage-stock", {
     body: {
-      action: "schedule",
+      action: "schedule-promo",
       productId,
       productTitle,
       percent: Math.round(percent),
@@ -52,8 +52,8 @@ export async function schedulePromo(
 
 /** Liste les promos programmées (toutes, ou pour un produit donné). */
 export async function listScheduledPromos(productId?: number): Promise<ScheduledPromo[]> {
-  const { data, error } = await supabase.functions.invoke("promo-scheduler", {
-    body: { action: "list", productId },
+  const { data, error } = await supabase.functions.invoke("manage-stock", {
+    body: { action: "list-scheduled", productId },
   });
   if (error) throw new Error(await fnError(error));
   return (data?.promos ?? []) as ScheduledPromo[];
@@ -61,8 +61,8 @@ export async function listScheduledPromos(productId?: number): Promise<Scheduled
 
 /** Annule une promo programmée (et la retire si elle est déjà active). */
 export async function cancelScheduledPromo(id: string): Promise<void> {
-  const { error } = await supabase.functions.invoke("promo-scheduler", {
-    body: { action: "cancel", id },
+  const { error } = await supabase.functions.invoke("manage-stock", {
+    body: { action: "cancel-scheduled", id },
   });
   if (error) throw new Error(await fnError(error));
 }
