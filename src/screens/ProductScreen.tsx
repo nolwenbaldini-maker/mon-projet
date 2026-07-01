@@ -78,6 +78,11 @@ export function ProductScreen({ route, navigation }: ProductProps) {
           }
         />
         <View style={styles.body}>
+          {promoPct > 0 && (
+            <View style={styles.promoBanner}>
+              <Text style={styles.promoBannerText}>🔥 En promotion — -{promoPct}%</Text>
+            </View>
+          )}
           <Text style={styles.title}>{product.title}</Text>
           <View style={styles.priceRow}>
             <Text style={[styles.price, promoPct > 0 && styles.pricePromo]}>
@@ -217,6 +222,15 @@ const styles = StyleSheet.create({
   },
   dotActive: { backgroundColor: colors.primary, width: 18 },
   body: { padding: 16 },
+  promoBanner: {
+    backgroundColor: "#dc2626",
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    alignSelf: "flex-start",
+    marginBottom: 10,
+  },
+  promoBannerText: { color: "#fff", fontWeight: "800", fontSize: 13 },
   title: { fontSize: 20, fontWeight: "700", color: colors.text },
   priceRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 8, flexWrap: "wrap" },
   price: { fontSize: 22, fontWeight: "800", color: colors.primary },

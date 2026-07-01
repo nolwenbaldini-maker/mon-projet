@@ -1,5 +1,5 @@
 import { useNavigation } from "@react-navigation/native";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -22,6 +22,12 @@ export function HomeScreen() {
   const [promos, setPromos] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Pour faire défiler jusqu'à la section Promotions au clic sur la bannière.
+  const scrollRef = useRef<ScrollView>(null);
+  const promoY = useRef(0);
+  const scrollToPromos = () =>
+    scrollRef.current?.scrollTo({ y: Math.max(0, promoY.current - 8), animated: true });
 
   async function load() {
     setLoading(true);
@@ -61,10 +67,25 @@ export function HomeScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    <ScrollView ref={scrollRef} style={styles.container} showsVerticalScrollIndicator={false}>
       <View style={styles.promo}>
         <Text style={styles.promoText}>🚚 Livraison gratuite dès 100€ d'achat !</Text>
       </View>
+
+      {/* Bannière PROMOTIONS (visible uniquement s'il y a des promos en cours) */}
+      {promos.length > 0 && (
+        <TouchableOpacity style={styles.promoBanner} activeOpacity={0.9} onPress={scrollToPromos}>
+          <Text style={styles.promoBannerEmoji}>🔥</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.promoBannerTitle}>PROMOTIONS EN COURS</Text>
+            <Text style={styles.promoBannerSub}>
+              {promos.length} bon{promos.length > 1 ? "s" : ""} plan{promos.length > 1 ? "s" : ""} à
+              saisir — prix réduits !
+            </Text>
+          </View>
+          <Text style={styles.promoBannerCta}>Voir ›</Text>
+        </TouchableOpacity>
+      )}
 
       {/* Héros */}
       <View style={styles.hero}>
@@ -92,7 +113,7 @@ export function HomeScreen() {
 
       {/* Promotions */}
       {promos.length > 0 && (
-        <>
+        <View onLayout={(e) => (promoY.current = e.nativeEvent.layout.y)}>
           <View style={styles.promoHeader}>
             <Text style={styles.sectionTitleInline}>🔥 Promotions</Text>
             <View style={styles.promoTag}>
@@ -115,7 +136,7 @@ export function HomeScreen() {
               />
             )}
           />
-        </>
+        </View>
       )}
 
       {/* Nos univers (accès rapide) */}
@@ -176,6 +197,22 @@ const styles = StyleSheet.create({
 
   promo: { backgroundColor: colors.primaryDark, paddingVertical: 8, alignItems: "center" },
   promoText: { color: "#fff", fontSize: 13, fontWeight: "600" },
+
+  promoBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: "#dc2626",
+    marginHorizontal: 12,
+    marginTop: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 14,
+  },
+  promoBannerEmoji: { fontSize: 28 },
+  promoBannerTitle: { color: "#fff", fontSize: 15, fontWeight: "900", letterSpacing: 0.5 },
+  promoBannerSub: { color: "#ffe4e4", fontSize: 12, marginTop: 2, fontWeight: "600" },
+  promoBannerCta: { color: "#fff", fontSize: 14, fontWeight: "800" },
 
   hero: { backgroundColor: colors.primary, paddingHorizontal: 20, paddingVertical: 22 },
   heroTitle: { color: "#fff", fontSize: 20, fontWeight: "800" },
