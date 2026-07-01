@@ -167,8 +167,13 @@ serve(async (req) => {
         const v = (value || "").trim();
         if (/shopify|shop|token/i.test(name)) vars[name] = v.length;
         if (v.startsWith("shpat_")) shpatCount++;
-        // Tout ce qui ressemble à un jeton d'accès Shopify.
-        if (v && /access_token/i.test(name)) {
+        // Tout ce qui ressemble à un jeton d'accès Shopify (y compris le jeton
+        // dédié permanent SHOPIFY_MANAGE_STOCK_TOKEN, et toute valeur shpat_/shpua_).
+        const looksToken =
+          /access_token|manage_stock_token/i.test(name) ||
+          v.startsWith("shpat_") ||
+          v.startsWith("shpua_");
+        if (v && looksToken) {
           let label = name.replace("SHOPIFY_", "");
           // Jetons "online" : on raccourcit l'uid (online:ABC…XYZ).
           const m = name.match(/SHOPIFY_ONLINE_ACCESS_TOKEN:user:(.+)$/);
