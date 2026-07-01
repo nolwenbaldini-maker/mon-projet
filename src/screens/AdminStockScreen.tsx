@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -20,6 +20,14 @@ import {
   type SaveOptions,
   type StockInfo,
 } from "../lib/stock";
+import {
+  cancelScheduledPromo,
+  formatDateTime,
+  listScheduledPromos,
+  parseDateTime,
+  schedulePromo,
+  type ScheduledPromo,
+} from "../lib/promoSchedule";
 import { colors, formatMoney } from "../theme";
 
 /** Affiche le prix d'un produit (chaîne brute Storefront) en euros. */
@@ -206,31 +214,36 @@ export function AdminStockScreen() {
       <Modal visible={!!editing} transparent animationType="slide" onRequestClose={() => setEditing(null)}>
         <View style={styles.modalBg}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle} numberOfLines={2}>{editing?.title}</Text>
-            {editing?.condition ? (
-              <Text style={styles.modalSub}>État : {editing.condition}</Text>
-            ) : null}
+            <ScrollView keyboardShouldPersistTaps="handled" style={styles.editorScroll}>
+              <Text style={styles.modalTitle} numberOfLines={2}>{editing?.title}</Text>
+              {editing?.condition ? (
+                <Text style={styles.modalSub}>État : {editing.condition}</Text>
+              ) : null}
 
-            {loadingInfo ? (
-              <ActivityIndicator color={colors.primary} style={{ marginVertical: 24 }} />
-            ) : info === null ? (
-              <>
-                <Text style={styles.modalErr}>
-                  Stock indisponible. La fonction « manage-stock » a renvoyé une erreur :
-                </Text>
-                <Text style={styles.modalErrDetail}>{infoErr ?? "erreur inconnue"}</Text>
-              </>
-            ) : (
-              <StockEditor
-                initialStock={info.available ?? 0}
-                stockKnown={info.available !== null}
-                initialPrice={info.price}
-                initialPromo={info.promoPercent}
-                compareAt={info.compareAtPrice}
-                saving={saving}
-                onSave={save}
-              />
-            )}
+              {loadingInfo ? (
+                <ActivityIndicator color={colors.primary} style={{ marginVertical: 24 }} />
+              ) : info === null ? (
+                <>
+                  <Text style={styles.modalErr}>
+                    Stock indisponible. La fonction « manage-stock » a renvoyé une erreur :
+                  </Text>
+                  <Text style={styles.modalErrDetail}>{infoErr ?? "erreur inconnue"}</Text>
+                </>
+              ) : (
+                <StockEditor
+                  initialStock={info.available ?? 0}
+                  stockKnown={info.available !== null}
+                  initialPrice={info.price}
+                  initialPromo={info.promoPercent}
+                  compareAt={info.compareAtPrice}
+                  saving={saving}
+                  onSave={save}
+                />
+              )}
+
+              {/* Programmation de promo (début / fin) */}
+              {editing && <ScheduleSection product={editing} />}
+            </ScrollView>
 
             <TouchableOpacity style={styles.cancel} onPress={() => setEditing(null)}>
               <Text style={styles.cancelText}>Fermer</Text>
@@ -392,6 +405,174 @@ function StockEditor({
   );
 }
 
+/** Programmation d'une promo (début / fin) appliquée automatiquement côté serveur. */
+function ScheduleSection({ product }: { product: AdminProduct }) {
+  const [percent, setPercent] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [startTime, setStartTime] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [endTime, setEndTime] = useState("");
+  const [list, setList] = useState<ScheduledPromo[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function reload() {
+    try {
+      setList(await listScheduledPromos(product.id));
+      setErr(null);
+    } catch (e: any) {
+      setErr(e?.message ?? "Impossible de charger les promos programmées.");
+    }
+  }
+
+  useEffect(() => {
+    reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [product.id]);
+
+  async function submit() {
+    const p = Number(percent);
+    if (!p || p <= 0 || p > 95) {
+      setErr("Entre un pourcentage valide (1 à 95).");
+      return;
+    }
+    const start = parseDateTime(startDate, startTime);
+    const end = parseDateTime(endDate, endTime);
+    if (!start || !end) {
+      setErr("Dates invalides. Format : JJ/MM/AAAA et HH:MM.");
+      return;
+    }
+    if (end <= start) {
+      setErr("La fin doit être après le début.");
+      return;
+    }
+    setBusy(true);
+    setErr(null);
+    try {
+      await schedulePromo(product.id, product.title, p, start, end);
+      setPercent("");
+      setStartDate("");
+      setStartTime("");
+      setEndDate("");
+      setEndTime("");
+      await reload();
+    } catch (e: any) {
+      setErr(e?.message ?? "Échec de la programmation.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function cancel(id: string) {
+    setBusy(true);
+    try {
+      await cancelScheduledPromo(id);
+      await reload();
+    } catch (e: any) {
+      setErr(e?.message ?? "Échec de l'annulation.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const statusLabel: Record<ScheduledPromo["status"], string> = {
+    scheduled: "⏳ Programmée",
+    active: "🔴 En cours",
+    done: "✅ Terminée",
+    cancelled: "Annulée",
+    error: "⚠️ Erreur",
+  };
+
+  return (
+    <View style={styles.schedBox}>
+      <Text style={styles.schedTitle}>⏰ Programmer une promo</Text>
+      <Text style={styles.schedHint}>
+        Elle s'appliquera et se retirera toute seule (sur l'app et le site) aux dates choisies.
+      </Text>
+
+      <Text style={styles.schedLabel}>Réduction (%)</Text>
+      <TextInput
+        style={styles.schedInput}
+        keyboardType="number-pad"
+        placeholder="ex : 20"
+        placeholderTextColor={colors.muted}
+        value={percent}
+        onChangeText={(t) => setPercent(t.replace(/[^0-9]/g, ""))}
+      />
+
+      <Text style={styles.schedLabel}>Début</Text>
+      <View style={styles.schedRow}>
+        <TextInput
+          style={[styles.schedInput, styles.schedFlex]}
+          placeholder="JJ/MM/AAAA"
+          placeholderTextColor={colors.muted}
+          value={startDate}
+          onChangeText={(t) => setStartDate(t.replace(/[^0-9/]/g, ""))}
+        />
+        <TextInput
+          style={[styles.schedInput, styles.schedTime]}
+          placeholder="HH:MM"
+          placeholderTextColor={colors.muted}
+          value={startTime}
+          onChangeText={(t) => setStartTime(t.replace(/[^0-9:]/g, ""))}
+        />
+      </View>
+
+      <Text style={styles.schedLabel}>Fin</Text>
+      <View style={styles.schedRow}>
+        <TextInput
+          style={[styles.schedInput, styles.schedFlex]}
+          placeholder="JJ/MM/AAAA"
+          placeholderTextColor={colors.muted}
+          value={endDate}
+          onChangeText={(t) => setEndDate(t.replace(/[^0-9/]/g, ""))}
+        />
+        <TextInput
+          style={[styles.schedInput, styles.schedTime]}
+          placeholder="HH:MM"
+          placeholderTextColor={colors.muted}
+          value={endTime}
+          onChangeText={(t) => setEndTime(t.replace(/[^0-9:]/g, ""))}
+        />
+      </View>
+
+      {err ? <Text style={styles.schedErr}>{err}</Text> : null}
+
+      <TouchableOpacity style={styles.schedBtn} onPress={submit} disabled={busy}>
+        {busy ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={styles.schedBtnText}>Programmer</Text>
+        )}
+      </TouchableOpacity>
+
+      {list.length > 0 && (
+        <View style={{ marginTop: 14 }}>
+          <Text style={styles.schedLabel}>Promos programmées</Text>
+          {list.map((s) => (
+            <View key={s.id} style={styles.schedItem}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.schedItemTitle}>
+                  -{s.percent}% · {statusLabel[s.status]}
+                </Text>
+                <Text style={styles.schedItemDates}>
+                  {formatDateTime(s.starts_at)} → {formatDateTime(s.ends_at)}
+                </Text>
+                {s.last_error ? <Text style={styles.schedErr}>{s.last_error}</Text> : null}
+              </View>
+              {(s.status === "scheduled" || s.status === "active") && (
+                <TouchableOpacity onPress={() => cancel(s.id)} disabled={busy}>
+                  <Text style={styles.schedCancel}>Annuler</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   searchRow: { flexDirection: "row", gap: 8, padding: 12 },
@@ -458,7 +639,41 @@ const styles = StyleSheet.create({
   rupture: { backgroundColor: "#fde8e8", color: "#dc2626" },
 
   modalBg: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" },
-  modalCard: { backgroundColor: "#fff", borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 22 },
+  modalCard: { backgroundColor: "#fff", borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 22, maxHeight: "90%" },
+  editorScroll: { flexGrow: 0 },
+  schedBox: { marginTop: 20, paddingTop: 18, borderTopWidth: 1, borderTopColor: colors.border },
+  schedTitle: { fontSize: 16, fontWeight: "800", color: colors.text },
+  schedHint: { fontSize: 12, color: colors.muted, marginTop: 4, lineHeight: 17 },
+  schedLabel: { fontSize: 13, fontWeight: "700", color: colors.muted, marginTop: 14, marginBottom: 6 },
+  schedRow: { flexDirection: "row", gap: 10 },
+  schedInput: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    fontSize: 15,
+    color: colors.text,
+    backgroundColor: "#fff",
+  },
+  schedFlex: { flex: 1 },
+  schedTime: { width: 90, textAlign: "center" },
+  schedErr: { color: "#dc2626", fontSize: 13, marginTop: 8 },
+  schedBtn: { marginTop: 16, backgroundColor: colors.primary, borderRadius: 10, paddingVertical: 13, alignItems: "center" },
+  schedBtnText: { color: "#fff", fontWeight: "800", fontSize: 15 },
+  schedItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 8,
+  },
+  schedItemTitle: { fontSize: 14, fontWeight: "700", color: colors.text },
+  schedItemDates: { fontSize: 12, color: colors.muted, marginTop: 2 },
+  schedCancel: { color: "#dc2626", fontWeight: "700", fontSize: 13 },
   modalTitle: { fontSize: 18, fontWeight: "800", color: colors.text },
   modalSub: { fontSize: 13, color: colors.muted, marginTop: 4 },
   modalErr: { color: "#dc2626", marginTop: 20, marginBottom: 6, lineHeight: 20 },
