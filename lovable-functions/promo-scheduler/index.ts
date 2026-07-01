@@ -27,16 +27,31 @@ const DOMAIN =
   (Deno.env.get("SHOPIFY_STORE_DOMAIN") ||
     Deno.env.get("SHOPIFY_SHOP_DOMAIN") ||
     "happycash16.myshopify.com").trim();
-const API = `https://${DOMAIN}/admin/api/2024-10`;
+// Même version d'API que la fonction manage-stock (qui fonctionne).
+const API = `https://${DOMAIN}/admin/api/2025-04`;
 
 const SB_URL = (Deno.env.get("SUPABASE_URL") ?? "").replace(/\/$/, "");
 const ANON = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ANON;
 
 // --- Shopify (jeton Admin permanent) ---------------------------------------
+// Priorité au jeton dédié permanent ; sinon on cherche N'IMPORTE quelle variable
+// contenant un jeton "shpat_" valide, en évitant l'ancien SHOPIFY_ACCESS_TOKEN
+// (périmé). C'est la même logique que manage-stock, qui fonctionne.
 function shopToken(): string {
+  const dedicated = (Deno.env.get("SHOPIFY_MANAGE_STOCK_TOKEN") || "").trim();
+  if (dedicated) return dedicated;
+  try {
+    const env = Deno.env.toObject();
+    // shpat_ trouvé dans une variable AUTRE que le SHOPIFY_ACCESS_TOKEN mort.
+    for (const [name, value] of Object.entries(env)) {
+      const v = (value || "").trim();
+      if (v.startsWith("shpat_") && name !== "SHOPIFY_ACCESS_TOKEN") return v;
+    }
+  } catch (_) {
+    /* ignore */
+  }
   return (
-    Deno.env.get("SHOPIFY_MANAGE_STOCK_TOKEN") ||
     Deno.env.get("SHOPIFY_ADMIN_TOKEN") ||
     Deno.env.get("SHOPIFY_ACCESS_TOKEN") ||
     ""
@@ -138,21 +153,21 @@ serve(async (req) => {
       if (!expected || secret !== expected) return json({ error: "forbidden" }, 403);
 
       const now = new Date().toISOString();
+      // On inclut 'error' pour réessayer automatiquement une fois le jeton corrigé.
       const rows: any[] = await sb(
-        `scheduled_promos?status=in.(scheduled,active)&select=*`
+        `scheduled_promos?status=in.(scheduled,active,error)&select=*`
       );
       let started = 0, ended = 0, failed = 0;
       for (const r of rows) {
         try {
-          if (r.status === "scheduled" && r.starts_at <= now && r.ends_at > now) {
+          const notEnded = r.ends_at > now;
+          const started_ = r.starts_at <= now;
+          if ((r.status === "scheduled" || r.status === "error") && started_ && notEnded) {
             await applyPromo(Number(r.product_id), Number(r.percent));
             await sb(`scheduled_promos?id=eq.${r.id}`, "PATCH", { status: "active", last_error: null });
             started++;
-          } else if (
-            (r.status === "active" || r.status === "scheduled") &&
-            r.ends_at <= now
-          ) {
-            // La promo est terminée (ou a été programmée entièrement dans le passé).
+          } else if (!notEnded) {
+            // Fenêtre terminée : on retire la promo si elle était active.
             if (r.status === "active") await removePromo(Number(r.product_id));
             await sb(`scheduled_promos?id=eq.${r.id}`, "PATCH", { status: "done", last_error: null });
             ended++;
@@ -166,6 +181,32 @@ serve(async (req) => {
         }
       }
       return json({ ok: true, started, ended, failed, checked: rows.length });
+    }
+
+    // --- Diagnostic (protégé par le secret du cron) : quel jeton est utilisé ?
+    if (action === "diag") {
+      const secret = req.headers.get("x-cron-secret") ?? "";
+      const expected = Deno.env.get("CRON_SECRET") ?? "";
+      if (!expected || secret !== expected) return json({ error: "forbidden" }, 403);
+      const tok = shopToken();
+      const tests: Record<string, string> = {};
+      for (const ver of ["2025-04", "2025-10", "2026-01"]) {
+        try {
+          const r = await fetch(`https://${DOMAIN}/admin/api/${ver}/shop.json`, {
+            headers: { "X-Shopify-Access-Token": tok },
+          });
+          tests[ver] = r.ok ? "200 OK" : String(r.status);
+        } catch (err) {
+          tests[ver] = "ERR";
+        }
+      }
+      const dedicated = (Deno.env.get("SHOPIFY_MANAGE_STOCK_TOKEN") || "").trim();
+      return json({
+        hasDedicated: dedicated.length > 0,
+        tokenLength: tok.length,
+        tokenLooksAdmin: tok.startsWith("shpat_"),
+        shopTests: tests,
+      });
     }
 
     // --- Actions admin ------------------------------------------------------
