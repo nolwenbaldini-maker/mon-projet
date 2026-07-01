@@ -84,14 +84,9 @@ function resolveToken(uid: string): string {
   return pickToken();
 }
 
-// Domaine de la boutique (public, pas un secret). On lit d'abord les variables
-// d'environnement ; à défaut on retombe sur le domaine connu de la boutique,
-// pour éviter une URL vide (erreur DNS "https://admin/...").
-const DOMAIN =
-  (Deno.env.get("SHOPIFY_STORE_DOMAIN") ||
-    Deno.env.get("SHOPIFY_SHOP_DOMAIN") ||
-    Deno.env.get("SHOPIFY_DOMAIN") ||
-    "happycash16.myshopify.com").trim();
+// DOMAINE TECHNIQUE RÉEL de la boutique — le même que les fonctions create-shopify-*.
+// ⚠️ Ce n'est PAS happycash16.myshopify.com (qui donne 401 sur l'API Admin).
+const DOMAIN = "58ned5-ut.myshopify.com";
 
 // Choix du jeton Admin : on regarde TOUTES les variables candidates et on
 // privilégie celle qui ressemble à un vrai jeton Admin (préfixe "shpat_"),
@@ -123,7 +118,40 @@ function pickToken(): string {
   return "";
 }
 const TOKEN = pickToken();
-const API = `https://${DOMAIN}/admin/api/2025-04`;
+const API = `https://${DOMAIN}/admin/api/2025-07`;
+
+// Fabrique un jeton Admin frais via le grant OAuth "client_credentials"
+// (CLIENT_ID + CLIENT_SECRET) — méthode des fonctions create-shopify-*.
+// Ce jeton ne périme pas et ne demande aucune app custom. C'est LA méthode fiable.
+async function mintToken(): Promise<string> {
+  const clientId = Deno.env.get("SHOPIFY_CLIENT_ID") || Deno.env.get("SHOPIFY_ADMIN_CLIENT_ID");
+  const clientSecret =
+    Deno.env.get("SHOPIFY_CLIENT_SECRET") || Deno.env.get("SHOPIFY_ADMIN_CLIENT_SECRET");
+  if (!clientId || !clientSecret) return "";
+  try {
+    const r = await fetch(`https://${DOMAIN}/admin/oauth/access_token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "client_credentials",
+        client_id: clientId,
+        client_secret: clientSecret,
+      }),
+    });
+    const j = await r.json().catch(() => null);
+    if (r.ok && typeof j?.access_token === "string") return j.access_token.trim();
+  } catch (_) {
+    /* ignore */
+  }
+  return "";
+}
+
+// Jeton à utiliser pour les opérations : client_credentials d'abord, sinon repli.
+async function getAdminToken(uid?: string): Promise<string> {
+  const minted = await mintToken();
+  if (minted) return minted;
+  return uid ? resolveToken(uid) : pickToken();
+}
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -244,12 +272,15 @@ serve(async (req) => {
       // toObject indisponible : on teste au moins le jeton résolu par défaut.
     }
     if (candidates.length === 0) candidates.push({ label: "TOKEN", value: TOKEN });
+    // Jeton fabriqué via client_credentials (la méthode fiable) — testé en premier.
+    const minted = await mintToken();
+    if (minted) candidates.unshift({ label: "client_credentials ⭐", value: minted });
 
-    // On teste CHAQUE jeton contre /shop.json pour voir lequel est valide.
+    // On teste CHAQUE jeton contre /shop.json (sur le BON domaine) pour voir lequel est valide.
     const shopTests: Record<string, string> = {};
     for (const c of candidates) {
       try {
-        const r = await fetch(`https://${DOMAIN}/admin/api/2024-10/shop.json`, {
+        const r = await fetch(`https://${DOMAIN}/admin/api/2025-07/shop.json`, {
           headers: { "X-Shopify-Access-Token": c.value },
         });
         let shopName = "";
@@ -278,6 +309,7 @@ serve(async (req) => {
     const expected = Deno.env.get("CRON_SECRET") ?? "";
     if (!expected || secret !== expected) return json({ error: "forbidden" }, 403);
     try {
+      const token = await getAdminToken();
       const now = new Date().toISOString();
       const rows: any[] = await sbRest(
         `scheduled_promos?status=in.(scheduled,active,error)&select=*`
@@ -288,11 +320,11 @@ serve(async (req) => {
           const notEnded = r.ends_at > now;
           const begun = r.starts_at <= now;
           if ((r.status === "scheduled" || r.status === "error") && begun && notEnded) {
-            await applyScheduledPromo(TOKEN, Number(r.product_id), Number(r.percent));
+            await applyScheduledPromo(token, Number(r.product_id), Number(r.percent));
             await sbRest(`scheduled_promos?id=eq.${r.id}`, "PATCH", { status: "active", last_error: null });
             started++;
           } else if (!notEnded) {
-            if (r.status === "active") await removeScheduledPromo(TOKEN, Number(r.product_id));
+            if (r.status === "active") await removeScheduledPromo(token, Number(r.product_id));
             await sbRest(`scheduled_promos?id=eq.${r.id}`, "PATCH", { status: "done", last_error: null });
             ended++;
           }
@@ -333,7 +365,7 @@ serve(async (req) => {
       const row = Array.isArray(inserted) ? inserted[0] : inserted;
       if (row && startsAt <= now && endsAt > now) {
         try {
-          await applyScheduledPromo(TOKEN, Number(productId), Math.round(Number(percent)));
+          await applyScheduledPromo(await getAdminToken(uid), Number(productId), Math.round(Number(percent)));
           await sbRest(`scheduled_promos?id=eq.${row.id}`, "PATCH", { status: "active" });
         } catch (e) {
           await sbRest(`scheduled_promos?id=eq.${row.id}`, "PATCH", {
@@ -355,13 +387,13 @@ serve(async (req) => {
       const rows: any[] = await sbRest(`scheduled_promos?id=eq.${id}&select=*`);
       const row = rows[0];
       if (row && row.status === "active") {
-        try { await removeScheduledPromo(TOKEN, Number(row.product_id)); } catch (_) { /* annule quand même */ }
+        try { await removeScheduledPromo(await getAdminToken(uid), Number(row.product_id)); } catch (_) { /* annule quand même */ }
       }
       await sbRest(`scheduled_promos?id=eq.${id}`, "PATCH", { status: "cancelled" });
       return json({ ok: true });
     }
 
-    const token = resolveToken(uid);
+    const token = await getAdminToken(uid);
     const sh = (path: string, method = "GET", b?: unknown) => shopify(token, path, method, b);
 
     // Variante principale + article d'inventaire
