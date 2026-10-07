@@ -98,6 +98,7 @@ export const UNIVERSES: Universe[] = [
       "casques",
       "claviers",
       "souris",
+      "ecrans",
       "accessoires",
     ],
   },

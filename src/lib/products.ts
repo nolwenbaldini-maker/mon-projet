@@ -76,16 +76,20 @@ export const CATEGORY_OPTIONS: Partial<Record<ProductCategory, string[]>> = {
     "Blu-ray",
   ],
   manga: ["Manga"],
-  informatique: [
-    "Claviers",
-    "Souris",
-    "Casques",
-    "PC portables",
-    "Téléphones",
-    "Montres connectées",
-    "Accessoires",
-  ],
 };
+
+/**
+ * Rayons Informatique : la fonction create-shopify-informatique n'accepte que
+ * des VALEURS précises en minuscules. On affiche un joli libellé mais on envoie
+ * la valeur exacte attendue par la fonction.
+ */
+export const INFORMATIQUE_OPTIONS: { value: string; label: string }[] = [
+  { value: "claviers", label: "Claviers" },
+  { value: "souris", label: "Souris" },
+  { value: "casques", label: "Casques" },
+  { value: "pc", label: "PC portables" },
+  { value: "ecrans", label: "Écrans" },
+];
 
 /** Extrait le vrai message d'erreur renvoyé par une Edge Function (corps de la réponse). */
 async function readFunctionError(error: any): Promise<string> {

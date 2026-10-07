@@ -19,6 +19,7 @@ import {
   CATEGORY_OPTIONS,
   CONDITIONS,
   CONSOLE_TAGS,
+  INFORMATIQUE_OPTIONS,
   PLATFORM_GROUPS,
   createShopifyProduct,
   type ProductCategory,
@@ -78,8 +79,8 @@ export function AdminProductScreen() {
       Alert.alert("Champs requis", "Le titre et le prix sont obligatoires.");
       return;
     }
-    if (CATEGORY_OPTIONS[category] && !cat) {
-      Alert.alert("Catégorie requise", "Choisis une catégorie dans la liste.");
+    if ((CATEGORY_OPTIONS[category] || category === "informatique") && !cat) {
+      Alert.alert("Catégorie requise", "Choisis un rayon dans la liste.");
       return;
     }
     setBusy(true);
@@ -199,12 +200,28 @@ export function AdminProductScreen() {
           </>
         )}
 
-        {(category === "dvd" || category === "manga" || category === "informatique") && (
+        {(category === "dvd" || category === "manga") && (
           <>
             <Text style={styles.label}>Catégorie / rayon</Text>
             <View style={styles.wrapRow}>
               {(CATEGORY_OPTIONS[category] || []).map((opt) => (
                 <Chip key={opt} label={opt} active={cat === opt} onPress={() => setCat(opt)} />
+              ))}
+            </View>
+          </>
+        )}
+
+        {category === "informatique" && (
+          <>
+            <Text style={styles.label}>Rayon</Text>
+            <View style={styles.wrapRow}>
+              {INFORMATIQUE_OPTIONS.map((opt) => (
+                <Chip
+                  key={opt.value}
+                  label={opt.label}
+                  active={cat === opt.value}
+                  onPress={() => setCat(opt.value)}
+                />
               ))}
             </View>
           </>
