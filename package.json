@@ -1,0 +1,11 @@
+{
+  "name": "esport-boosters",
+  "version": "1.0.0",
+  "description": "Système d'ouverture de boosters de cartes de joueurs esport",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Esport Boosters</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>⚡ Esport Boosters</h1>
+    <nav>
+      <button data-view="shop" class="active">Boutique</button>
+      <button data-view="collection">Collection</button>
+    </nav>
+    <div class="wallet">
+      <button id="daily">🎁 Récompense du jour</button>
+      <span id="coins">0</span> 🪙
+    </div>
+  </header>
+
+  <main>
+    <section id="shop" class="view active">
+      <p class="pity" id="pity"></p>
+      <div id="boosters" class="boosters"></div>
+    </section>
+
+    <section id="collection" class="view">
+      <div class="filters">
+        <select id="filter-game"><option value="">Tous les jeux</option></select>
+        <select id="filter-rarity"><option value="">Toutes les raretés</option></select>
+        <span id="completion"></span>
+      </div>
+      <div id="collection-grid" class="grid"></div>
+    </section>
+  </main>
+
+  <div id="opening" class="overlay hidden">
+    <div id="pack" class="pack"></div>
+    <div id="reveal" class="reveal"></div>
+    <div class="overlay-actions">
+      <button id="reveal-all">Tout révéler</button>
+      <button id="close-opening" class="hidden">Continuer</button>
+    </div>
+    <p id="opening-summary"></p>
+  </div>
+
+  <footer>
+    <button id="reset" class="link">Réinitialiser la progression</button>
+  </footer>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
